@@ -609,110 +609,63 @@ type GraphTallyRAVCollection @entity {
 
 | Event | Handler Action |
 |-------|----------------|
-| `ProvisionCreated` | Create `Provision`, `DelegationPool`, update `ServiceProvider` |
-| `ProvisionIncreased` | Update `Provision.tokens`, `ServiceProvider.tokensProvisioned` |
-| `ProvisionThawed` | Update `Provision.tokensThawing`, `sharesThawing` |
-| `TokensDeprovisioned` | Update `Provision`, `ServiceProvider` |
+| `HorizonStakeDeposited` | Update `ServiceProvider.tokensStaked`, `GraphNetwork.tokensStaked` |
+| `HorizonStakeLocked` | Update `ServiceProvider` |
+| `HorizonStakeWithdrawn` | Update `ServiceProvider.tokensStaked`, `GraphNetwork.tokensStaked` |
+| `ProvisionCreated` | Create `Provision`, `DelegationPool`, update `ServiceProvider`, `DataService`, `GraphNetwork` |
+| `ProvisionIncreased` | Update `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
+| `ProvisionThawed` | Update `Provision` thawing fields |
+| `TokensDeprovisioned` | Update `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
 | `ProvisionParametersStaged` | Update pending parameters on `Provision` |
 | `ProvisionParametersSet` | Update active parameters on `Provision` |
-| `ProvisionSlashed` | Update `Provision.tokens`, `GraphNetwork.totalSlashed` |
-| `DelegationSlashed` | Update `DelegationPool.tokens`, `GraphNetwork.totalSlashed` |
-| `TokensDelegated` | Create/update `Delegation`, update `DelegationPool` |
-| `TokensUndelegated` | Update `Delegation.shares`, `DelegationPool` thawing fields |
-| `DelegatedTokensWithdrawn` | Update `Delegation`, `DelegationPool` |
+| `ProvisionSlashed` | Update `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` slashing fields |
+| `DelegationSlashed` | Update `DelegationPool`, `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` slashing fields |
+| `DelegationSlashingSkipped` | No action required |
+| `VerifierTokensSent` | No action required (informational) |
+| `TokensDelegated` | Create/update `Delegator`, `Delegation`, `DelegationPool`, `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
+| `TokensUndelegated` | Update `Delegation`, `Delegator`, `DelegationPool` thawing fields |
+| `DelegatedTokensWithdrawn` | Update `Delegation`, `Delegator`, `DelegationPool`, `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
 | `TokensToDelegationPoolAdded` | Update `DelegationPool.tokens` |
 | `DelegationFeeCutSet` | Update fee cut fields on `Provision` |
-| `ThawRequestCreated` | Create `ThawRequest` |
-| `ThawRequestFulfilled` | Update `ThawRequest.fulfilled` |
-| `ThawRequestsFulfilled` | Batch update `ThawRequest` entities |
-| `OperatorSet` | Create/update `Operator` |
-| `HorizonStakeWithdrawn` | Update `ServiceProvider.tokensStaked` |
+| `ThawRequestCreated` | Create `ThawRequest`, update counts on related entities |
+| `ThawRequestFulfilled` | Update `ThawRequest.fulfilled`, update counts |
+| `ThawRequestsFulfilled` | Batch update `ThawRequest` entities, update counts |
+| `OperatorSet` | Create/update `Operator`, `OperatorAuthorization` |
+| `MaxThawingPeriodSet` | Update `GraphNetwork.maxThawingPeriod` |
+| `DelegationSlashingEnabled` | Update `GraphNetwork.delegationSlashingEnabled` |
 
 ### GraphPayments
 
 | Event | Handler Action |
 |-------|----------------|
-| `GraphPaymentCollected` | Create `PaymentCollection` |
+| `GraphPaymentCollected` | Create `PaymentCollection`, update `GraphNetwork`, `ServiceProvider`, `DataService`, `Provision`, `DelegationPool` token aggregates |
 
 ### PaymentsEscrow
 
 | Event | Handler Action |
 |-------|----------------|
-| `Deposit` | Create/update `EscrowAccount.balance` |
-| `Thaw` | Update `EscrowAccount` thawing fields |
-| `CancelThaw` | Reset `EscrowAccount` thawing fields |
-| `Withdraw` | Update `EscrowAccount.balance` |
-| `EscrowCollected` | Update `EscrowAccount.balance` |
+| `Deposit` | Create/update `EscrowAccount`, update `GraphNetwork.tokensEscrowed` |
+| `Thaw` | Update `EscrowAccount` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
+| `CancelThaw` | Reset `EscrowAccount` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
+| `Withdraw` | Update `EscrowAccount.tokens`, update `GraphNetwork.tokensEscrowed` |
+| `EscrowCollected` | Update `EscrowAccount.tokens`, update `GraphNetwork.tokensEscrowed` |
 
-## Example Queries
+### GraphTallyCollector
 
-### Service Provider Overview
+| Event | Handler Action |
+|-------|----------------|
+| `SignerAuthorized` | Create/update `GraphTallySigner`, `GraphTallySignerAuthorization` |
+| `SignerThawing` | Update `GraphTallySignerAuthorization.thawEndTimestamp` |
+| `SignerRevoked` | Update `GraphTallySignerAuthorization.authorized` |
+| `SignerThawCanceled` | Reset `GraphTallySignerAuthorization.thawEndTimestamp` |
+| `PaymentCollected` | Create `GraphTallyRAVCollection`, update `GraphNetwork.countRAVsCollected` |
+| `RAVCollected` | Update `GraphTallyRAVCollection` with RAV details |
 
-```graphql
-query ServiceProviderOverview($id: ID!) {
-  serviceProvider(id: $id) {
-    tokensStaked
-    tokensProvisioned
-    tokensIdle
-    provisions {
-      dataService { id }
-      tokens
-      tokensThawing
-      maxVerifierCut
-      thawingPeriod
-      delegationPool {
-        tokens
-        shares
-      }
-    }
-  }
-}
-```
+### DataService (ProvisionManager)
 
-### Delegations for a Delegator
-
-```graphql
-query DelegatorPositions($delegator: Bytes!) {
-  delegations(where: { delegator: $delegator, shares_gt: 0 }) {
-    serviceProvider { id }
-    dataService { id }
-    shares
-    pool {
-      tokens
-      shares
-    }
-  }
-}
-```
-
-### Pending Thaw Requests
-
-```graphql
-query PendingThaws($owner: Bytes!) {
-  thawRequests(
-    where: { owner: $owner, fulfilled: false, valid: true }
-    orderBy: thawingUntil
-  ) {
-    id
-    type
-    serviceProvider { id }
-    dataService { id }
-    shares
-    thawingUntil
-  }
-}
-```
-
-### Protocol Stats
-
-```graphql
-query ProtocolStats {
-  graphNetwork(id: "1") {
-    totalStake
-    totalDelegation
-    totalProvisions
-    totalSlashed
-    delegationSlashingEnabled
-  }
-}
-```
+| Event | Handler Action |
+|-------|----------------|
+| `ProvisionTokensRangeSet` | Update `DataService.minProvisionTokens`, `DataService.maxProvisionTokens` |
+| `DelegationRatioSet` | Update `DataService.delegationRatio` |
+| `VerifierCutRangeSet` | Update `DataService.minVerifierCut`, `DataService.maxVerifierCut` |
+| `ThawingPeriodRangeSet` | Update `DataService.minThawingPeriod`, `DataService.maxThawingPeriod` |
