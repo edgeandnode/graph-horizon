@@ -34,7 +34,7 @@ Singleton entity for protocol-wide aggregates and parameters.
 ```graphql
 type GraphNetwork @entity {
   "Singleton entity, always '1'"
-  id: ID!
+  id: Bytes!
 
   # Counts
   "Active service providers"
@@ -113,11 +113,19 @@ An account that stakes GRT to provide services.
 ```graphql
 type ServiceProvider @entity {
   "Service provider address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Provisions created by this service provider"
   provisions: [Provision!]! @derivedFrom(field: "serviceProvider")
+  "Delegation pools for this service provider"
+  delegationPools: [DelegationPool!]! @derivedFrom(field: "serviceProvider")
+  "Delegations to this service provider"
+  delegations: [Delegation!]! @derivedFrom(field: "serviceProvider")
+  "Provision thaw requests for this service provider"
+  provisionThawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "serviceProvider")
+  "Delegation thaw requests for this service provider"
+  delegationThawRequests: [DelegationThawRequest!]! @derivedFrom(field: "serviceProvider")
   "Operator authorizations for this service provider"
   operatorAuthorizations: [OperatorAuthorization!]! @derivedFrom(field: "serviceProvider")
   "Escrow accounts where this service provider is the receiver"
@@ -194,11 +202,21 @@ Represents a data service (verifier) in the protocol.
 ```graphql
 type DataService @entity {
   "Data service (verifier) contract address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Provisions for this data service"
   provisions: [Provision!]! @derivedFrom(field: "dataService")
+  "Delegation pools for this data service"
+  delegationPools: [DelegationPool!]! @derivedFrom(field: "dataService")
+  "Delegations for this data service"
+  delegations: [Delegation!]! @derivedFrom(field: "dataService")
+  "Provision thaw requests for this data service"
+  provisionThawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "dataService")
+  "Delegation thaw requests for this data service"
+  delegationThawRequests: [DelegationThawRequest!]! @derivedFrom(field: "dataService")
+  "Operator authorizations for this data service"
+  operatorAuthorizations: [OperatorAuthorization!]! @derivedFrom(field: "dataService")
 
   # Counts
   "Active service providers"
@@ -270,8 +288,8 @@ Stake allocated by a service provider to a specific data service.
 
 ```graphql
 type Provision @entity {
-  "Concatenation of service provider address and data service address (serviceProvider-dataService)"
-  id: ID!
+  "Concatenation of service provider and data service addresses"
+  id: Bytes!
 
   # References
   "Service provider"
@@ -362,7 +380,7 @@ Pending deprovision request to remove stake from a provision.
 ```graphql
 type ProvisionThawRequest @entity {
   "Thaw request ID from contract event"
-  id: ID!
+  id: Bytes!
 
   # References
   "Provision being thawed"
@@ -404,8 +422,8 @@ Aggregate delegation pool for a provision.
 
 ```graphql
 type DelegationPool @entity {
-  "Same as Provision ID (serviceProvider-dataService)"
-  id: ID!
+  "Same as Provision ID (serviceProvider.concat(dataService))"
+  id: Bytes!
 
   # References
   "Provision this pool belongs to"
@@ -466,11 +484,13 @@ An account that delegates tokens to service providers.
 ```graphql
 type Delegator @entity {
   "Delegator address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Delegations by this delegator"
   delegations: [Delegation!]! @derivedFrom(field: "delegator")
+  "Thaw requests by this delegator"
+  thawRequests: [DelegationThawRequest!]! @derivedFrom(field: "delegator")
 
   # Counts
   "Active delegations"
@@ -502,8 +522,8 @@ Individual delegator's stake in a delegation pool.
 
 ```graphql
 type Delegation @entity {
-  "Concatenation of delegator, service provider, and data service addresses (delegator-serviceProvider-dataService)"
-  id: ID!
+  "Concatenation of delegator, service provider, and data service addresses"
+  id: Bytes!
 
   # References
   "Delegator"
@@ -552,7 +572,7 @@ Pending undelegation request to remove stake from a delegation.
 ```graphql
 type DelegationThawRequest @entity {
   "Thaw request ID from contract event"
-  id: ID!
+  id: Bytes!
 
   # References
   "Delegation being thawed"
@@ -599,7 +619,7 @@ An operator account that can be authorized to act on behalf of service providers
 ```graphql
 type Operator @entity {
   "Operator address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Authorizations granted to this operator"
@@ -627,8 +647,8 @@ Authorization for an operator to act on behalf of a service provider on a specif
 
 ```graphql
 type OperatorAuthorization @entity {
-  "Concatenation of operator, service provider, and data service addresses (operator-serviceProvider-dataService)"
-  id: ID!
+  "Concatenation of operator, service provider, and data service addresses"
+  id: Bytes!
 
   # References
   "Operator"
@@ -661,15 +681,19 @@ An account that pays for services via GraphPayments.
 ```graphql
 type Payer @entity {
   "Payer address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Escrow accounts funded by this payer"
   escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "payer")
+  "GraphTally signer authorizations for this payer"
+  signerAuthorizations: [GraphTallySignerAuthorization!]! @derivedFrom(field: "payer")
 
   # Counts
   "Active escrow accounts"
   countEscrowAccounts: Int!
+  "Active signer authorizations"
+  countSignerAuthorizations: Int!
 
   # Tokens
   "Total tokens in escrow"
@@ -698,7 +722,7 @@ A contract that facilitates payment collection through GraphPayments (e.g., Grap
 ```graphql
 type Collector @entity {
   "Collector contract address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Escrow accounts using this collector"
@@ -734,8 +758,8 @@ Escrow balance for a payer-collector-serviceProvider tuple in GraphPayments.
 
 ```graphql
 type EscrowAccount @entity {
-  "Concatenation of payer, collector, and service provider addresses (payer-collector-serviceProvider)"
-  id: ID!
+  "Concatenation of payer, collector, and service provider addresses"
+  id: Bytes!
 
   # References
   "Payer that deposited funds into the escrow account"
@@ -772,7 +796,7 @@ An account authorized to sign RAVs on behalf of payers.
 ```graphql
 type GraphTallySigner @entity {
   "Signer address"
-  id: ID!
+  id: Bytes!
 
   # Relationships
   "Authorizations granted to this signer"
@@ -800,8 +824,8 @@ Authorization for a signer to sign RAVs on behalf of a payer.
 
 ```graphql
 type GraphTallySignerAuthorization @entity {
-  "Concatenation of signer and payer addresses (signer-payer)"
-  id: ID!
+  "Concatenation of signer and payer addresses"
+  id: Bytes!
 
   # References
   "Signer"
