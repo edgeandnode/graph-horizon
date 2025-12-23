@@ -33,6 +33,7 @@ Singleton entity for protocol-wide aggregates and parameters.
 
 ```graphql
 type GraphNetwork @entity {
+  "Singleton entity, always '1'"
   id: ID!
 
   # Counts
@@ -44,6 +45,12 @@ type GraphNetwork @entity {
   countDataServices: Int!
   "Active provisions"
   countProvisions: Int!
+  "Active payers"
+  countPayers: Int!
+  "Active collectors"
+  countCollectors: Int!
+  "Active escrow accounts"
+  countEscrowAccounts: Int!
 
   # Stake aggregates
   "Total tokens staked by service providers"
@@ -66,16 +73,16 @@ type GraphNetwork @entity {
   tokensSlashedFromDelegationPools: BigInt!
 
   # Payment collection aggregates
-  "Total tokens collected"
+  "Total tokens collected in the protocol"
   tokensCollected: BigInt!
-  "Total tokens burnt as protocol tax"
-  tokensCollectedByProtocolTax: BigInt!
-  "Total tokens collected by service providers"
-  tokensCollectedByServiceProviders: BigInt!
-  "Total tokens collected by delegators"
-  tokensCollectedByDelegators: BigInt!
-  "Total tokens collected by data services"
-  tokensCollectedByDataServices: BigInt!
+  "Tokens burned as protocol tax"
+  tokensDistributedAsProtocolTax: BigInt!
+  "Tokens distributed to service providers"
+  tokensDistributedToServiceProviders: BigInt!
+  "Tokens distributed to delegation pools"
+  tokensDistributedToDelegationPools: BigInt!
+  "Tokens distributed to data services"
+  tokensDistributedToDataServices: BigInt!
 
   # Payment escrow aggregates
   "Total tokens held in escrow"
@@ -94,7 +101,7 @@ type GraphNetwork @entity {
   protocolPaymentCut: BigInt!
   "Withdrawal thawing period for payments escrow (seconds)"
   escrowThawingPeriod: BigInt!
-  "Signer revocation thawing period for payments escrow(seconds)"
+  "Signer revocation thawing period for payments escrow (seconds)"
   revokeSignerThawingPeriod: BigInt!
 }
 ```
@@ -105,23 +112,28 @@ An account that stakes GRT to provide services.
 
 ```graphql
 type ServiceProvider @entity {
+  "Service provider address"
   id: ID!
 
   # Relationships
+  "Provisions created by this service provider"
   provisions: [Provision!]! @derivedFrom(field: "serviceProvider")
+  "Operator authorizations for this service provider"
   operatorAuthorizations: [OperatorAuthorization!]! @derivedFrom(field: "serviceProvider")
+  "Escrow accounts where this service provider is the receiver"
+  escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "serviceProvider")
 
   # Counts
   "Active provisions"
   countProvisions: Int!
   "Active delegators"
   countDelegators: Int!
-  "Active operators"
-  countOperators: Int!
-  "Pending thaw requests for the service provider"
+  "Pending thaw requests"
   countThawRequests: Int!
-  "Amount of times slashed"
+  "Slash events"
   countSlashEvents: Int!
+  "Active escrow accounts"
+  countEscrowAccounts: Int!
 
   # Stake
   "Tokens staked by the service provider"
@@ -147,9 +159,31 @@ type ServiceProvider @entity {
   "Tokens slashed from delegation pools"
   tokensSlashedFromDelegationPools: BigInt!
 
-  # Payments
-  "Total tokens collected"
+  # Payment collection
+  "Total tokens collected by the service provider"
   tokensCollected: BigInt!
+  "Tokens burned as protocol tax"
+  tokensDistributedAsProtocolTax: BigInt!
+  "Tokens kept by the service provider"
+  tokensDistributedToServiceProvider: BigInt!
+  "Tokens distributed to delegation pools"
+  tokensDistributedToDelegationPools: BigInt!
+  "Tokens distributed to data services"
+  tokensDistributedToDataServices: BigInt!
+
+  # Escrow
+  "Total tokens in escrow for this service provider"
+  tokensEscrowed: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -159,9 +193,11 @@ Represents a data service (verifier) in the protocol.
 
 ```graphql
 type DataService @entity {
+  "Data service (verifier) contract address"
   id: ID!
 
   # Relationships
+  "Provisions for this data service"
   provisions: [Provision!]! @derivedFrom(field: "dataService")
 
   # Counts
@@ -173,7 +209,7 @@ type DataService @entity {
   countThawRequestsProvision: Int!
   "Pending delegation thaw requests"
   countThawRequestsDelegation: Int!
-  "Amount of times slashed"
+  "Slash events"
   countSlashEvents: Int!
 
   # Tokens
@@ -187,8 +223,18 @@ type DataService @entity {
   tokensThawingFromDelegationPools: BigInt!
   "Total tokens slashed"
   tokensSlashed: BigInt!
-  "Total tokens collected"
+
+  # Payment collection
+  "Total tokens collected by service providers for this data service"
   tokensCollected: BigInt!
+  "Tokens burned as protocol tax"
+  tokensDistributedAsProtocolTax: BigInt!
+  "Tokens distributed to service providers"
+  tokensDistributedToServiceProviders: BigInt!
+  "Tokens distributed to delegation pools"
+  tokensDistributedToDelegationPools: BigInt!
+  "Tokens kept by the data service"
+  tokensDistributedToDataService: BigInt!
 
   # Parameters
   "Max delegation multiplier on service provider stake"
@@ -205,6 +251,16 @@ type DataService @entity {
   minThawingPeriod: BigInt!
   "Maximum thawing period (seconds)"
   maxThawingPeriod: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -214,6 +270,7 @@ Stake allocated by a service provider to a specific data service.
 
 ```graphql
 type Provision @entity {
+  "Concatenation of service provider address and data service address (serviceProvider-dataService)"
   id: ID!
 
   # References
@@ -221,18 +278,19 @@ type Provision @entity {
   serviceProvider: ServiceProvider!
   "Data service"
   dataService: DataService!
-  "Delegation pool"
-  delegationPool: DelegationPool!
 
   # Relationships
-  thawRequests: [ThawRequest!]! @derivedFrom(field: "provision")
+  "Delegation pool for this provision"
+  delegationPool: DelegationPool! @derivedFrom(field: "provision")
+  "Thaw requests for this provision"
+  thawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "provision")
 
   # Counts
   "Active delegators"
   countDelegators: Int!
   "Pending thaw requests"
   countThawRequests: Int!
-  "Amount of times slashed"
+  "Slash events"
   countSlashEvents: Int!
 
   # Tokens
@@ -246,8 +304,18 @@ type Provision @entity {
   tokensDelegated: BigInt!
   "Total tokens slashed"
   tokensSlashed: BigInt!
-  "Total tokens collected"
+
+  # Payment collection
+  "Total tokens collected by this provision"
   tokensCollected: BigInt!
+  "Tokens burned as protocol tax"
+  tokensDistributedAsProtocolTax: BigInt!
+  "Tokens distributed to service provider"
+  tokensDistributedToServiceProvider: BigInt!
+  "Tokens distributed to delegation pool"
+  tokensDistributedToDelegationPool: BigInt!
+  "Tokens distributed to data service"
+  tokensDistributedToDataService: BigInt!
 
   # Parameters
   "Max verifier reward on slash (PPM)"
@@ -274,6 +342,59 @@ type Provision @entity {
   # State
   "Thawing nonce - incremented on slash to invalidate pending thaw requests"
   thawingNonce: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+```
+
+### ProvisionThawRequest
+
+Pending deprovision request to remove stake from a provision.
+
+```graphql
+type ProvisionThawRequest @entity {
+  "Thaw request ID from contract event"
+  id: ID!
+
+  # References
+  "Provision being thawed"
+  provision: Provision!
+  "Service provider"
+  serviceProvider: ServiceProvider!
+  "Data service"
+  dataService: DataService!
+
+  # State
+  "Shares being thawed"
+  shares: BigInt!
+  "Timestamp when thaw completes"
+  thawingUntil: BigInt!
+  "Thawing nonce at time of creation"
+  thawingNonce: BigInt!
+
+  # Status
+  "False if invalidated by slashing"
+  valid: Boolean!
+  "True when tokens have been withdrawn"
+  fulfilled: Boolean!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -283,21 +404,29 @@ Aggregate delegation pool for a provision.
 
 ```graphql
 type DelegationPool @entity {
+  "Same as Provision ID (serviceProvider-dataService)"
   id: ID!
 
   # References
-  "Provision"
+  "Provision this pool belongs to"
   provision: Provision!
+  "Service provider"
+  serviceProvider: ServiceProvider!
+  "Data service"
+  dataService: DataService!
 
   # Relationships
+  "Delegations in this pool"
   delegations: [Delegation!]! @derivedFrom(field: "pool")
+  "Thaw requests for delegations in this pool"
+  thawRequests: [DelegationThawRequest!]! @derivedFrom(field: "pool")
 
   # Counts
   "Active delegators"
   countDelegators: Int!
   "Pending thaw requests"
   countThawRequests: Int!
-  "Amount of times slashed"
+  "Slash events"
   countSlashEvents: Int!
 
   # Tokens
@@ -317,6 +446,16 @@ type DelegationPool @entity {
   # State
   "Thawing nonce - incremented on slash to invalidate pending thaw requests"
   thawingNonce: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -326,9 +465,11 @@ An account that delegates tokens to service providers.
 
 ```graphql
 type Delegator @entity {
+  "Delegator address"
   id: ID!
 
   # Relationships
+  "Delegations by this delegator"
   delegations: [Delegation!]! @derivedFrom(field: "delegator")
 
   # Counts
@@ -342,8 +483,16 @@ type Delegator @entity {
   tokensDelegated: BigInt!
   "Tokens currently thawing"
   tokensThawing: BigInt!
-  "Total tokens collected"
-  tokensCollected: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -353,6 +502,7 @@ Individual delegator's stake in a delegation pool.
 
 ```graphql
 type Delegation @entity {
+  "Concatenation of delegator, service provider, and data service addresses (delegator-serviceProvider-dataService)"
   id: ID!
 
   # References
@@ -366,66 +516,79 @@ type Delegation @entity {
   dataService: DataService!
 
   # Relationships
-  thawRequests: [ThawRequest!]! @derivedFrom(field: "delegation")
+  "Thaw requests for this delegation"
+  thawRequests: [DelegationThawRequest!]! @derivedFrom(field: "delegation")
 
   # Counts
   "Pending thaw requests"
   countThawRequests: Int!
 
   # Tokens
-  "Tokens delegated - note that this does not represent current delegation valuation"
+  "Tokens delegated (input amount, not current valuation)"
   tokensDelegated: BigInt!
   "Delegator's shares in pool"
   shares: BigInt!
   "Tokens currently thawing"
   tokensThawing: BigInt!
-  "Tokens collected by this delegator"
-  tokensCollected: BigInt!
+  "Shares currently thawing"
+  sharesThawing: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
-### ThawRequest
+### DelegationThawRequest
 
-Pending deprovision or undelegate request.
+Pending undelegation request to remove stake from a delegation.
 
 ```graphql
-enum ThawRequestType {
-  PROVISION
-  DELEGATION
-}
-
-type ThawRequest @entity {
+type DelegationThawRequest @entity {
+  "Thaw request ID from contract event"
   id: ID!
 
-  # Type
-  "Thaw request type"
-  type: ThawRequestType!
-
   # References
+  "Delegation being thawed"
+  delegation: Delegation!
+  "Delegator"
+  delegator: Delegator!
+  "Delegation pool"
+  pool: DelegationPool!
   "Service provider"
   serviceProvider: ServiceProvider!
   "Data service"
   dataService: DataService!
-  "Owner address - service provider (provision) or delegator (delegation)"
-  owner: Bytes!
-  "Provision - for provision thaws"
-  provision: Provision
-  "Delegation - for delegation thaws"
-  delegation: Delegation
 
   # State
   "Shares being thawed"
   shares: BigInt!
   "Timestamp when thaw completes"
   thawingUntil: BigInt!
-  "Thawing nonce"
+  "Thawing nonce at time of creation"
   thawingNonce: BigInt!
 
   # Status
   "False if invalidated by slashing"
   valid: Boolean!
-  "True when tokens withdrawn"
+  "True when tokens have been withdrawn"
   fulfilled: Boolean!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -435,14 +598,26 @@ An operator account that can be authorized to act on behalf of service providers
 
 ```graphql
 type Operator @entity {
+  "Operator address"
   id: ID!
 
   # Relationships
+  "Authorizations granted to this operator"
   authorizations: [OperatorAuthorization!]! @derivedFrom(field: "operator")
 
   # Counts
   "Active authorizations"
   countAuthorizations: Int!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -452,6 +627,7 @@ Authorization for an operator to act on behalf of a service provider on a specif
 
 ```graphql
 type OperatorAuthorization @entity {
+  "Concatenation of operator, service provider, and data service addresses (operator-serviceProvider-dataService)"
   id: ID!
 
   # References
@@ -465,24 +641,109 @@ type OperatorAuthorization @entity {
   # State
   "Current authorization status"
   allowed: Boolean!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+```
+
+### Payer
+
+An account that pays for services via GraphPayments.
+
+```graphql
+type Payer @entity {
+  "Payer address"
+  id: ID!
+
+  # Relationships
+  "Escrow accounts funded by this payer"
+  escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "payer")
+
+  # Counts
+  "Active escrow accounts"
+  countEscrowAccounts: Int!
+
+  # Tokens
+  "Total tokens in escrow"
+  tokensEscrowed: BigInt!
+  "Total tokens thawing"
+  tokensThawing: BigInt!
+  "Total tokens collected from escrow"
+  tokensCollected: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+```
+
+### Collector
+
+A contract that facilitates payment collection through GraphPayments (e.g., GraphTallyCollector).
+
+```graphql
+type Collector @entity {
+  "Collector contract address"
+  id: ID!
+
+  # Relationships
+  "Escrow accounts using this collector"
+  escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "collector")
+
+  # Counts
+  "Active escrow accounts"
+  countEscrowAccounts: Int!
+
+  # Tokens
+  "Total tokens in escrow"
+  tokensEscrowed: BigInt!
+  "Total tokens thawing"
+  tokensThawing: BigInt!
+  "Total tokens collected"
+  tokensCollected: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
 ### EscrowAccount
 
-Escrow balance for a payer-collector-receiver tuple.
+Escrow balance for a payer-collector-serviceProvider tuple in GraphPayments.
 
 ```graphql
 type EscrowAccount @entity {
+  "Concatenation of payer, collector, and service provider addresses (payer-collector-serviceProvider)"
   id: ID!
 
   # References
-  "Payer address"
-  payer: Bytes!
-  "Collector address"
-  collector: Bytes!
-  "Receiver address"
-  receiver: Bytes!
+  "Payer that deposited funds into the escrow account"
+  payer: Payer!
+  "Collector allowed to withdraw funds from the account"
+  collector: Collector!
+  "Service provider that can collect funds from the account"
+  serviceProvider: ServiceProvider!
 
   # Tokens
   "Available tokens"
@@ -491,48 +752,16 @@ type EscrowAccount @entity {
   tokensThawing: BigInt!
   "Timestamp when thawing completes (0 if not thawing)"
   thawEndTimestamp: BigInt!
-}
-```
 
-### PaymentCollection
-
-Record of a payment distribution event.
-
-```graphql
-enum PaymentType {
-  QUERY_FEE
-  INDEXING_FEE
-  INDEXING_REWARDS
-}
-
-type PaymentCollection @entity {
-  id: ID!
-
-  # References
-  "Payer address"
-  payer: Bytes!
-  "Receiver address"
-  receiver: Bytes!
-  "Data service"
-  dataService: DataService!
-
-  # Payment details
-  "Payment type"
-  paymentType: PaymentType!
-  "Total payment amount"
-  tokens: BigInt!
-
-  # Distribution
-  "Protocol tax (burned)"
-  tokensProtocol: BigInt!
-  "Data service cut"
-  tokensDataService: BigInt!
-  "Delegation pool rewards"
-  tokensDelegationPool: BigInt!
-  "Receiver's share"
-  tokensReceiver: BigInt!
-  "Where receiver tokens went"
-  receiverDestination: Bytes!
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -542,14 +771,26 @@ An account authorized to sign RAVs on behalf of payers.
 
 ```graphql
 type GraphTallySigner @entity {
+  "Signer address"
   id: ID!
 
   # Relationships
+  "Authorizations granted to this signer"
   authorizations: [GraphTallySignerAuthorization!]! @derivedFrom(field: "signer")
 
   # Counts
   "Active authorizations"
   countAuthorizations: Int!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -559,47 +800,30 @@ Authorization for a signer to sign RAVs on behalf of a payer.
 
 ```graphql
 type GraphTallySignerAuthorization @entity {
+  "Concatenation of signer and payer addresses (signer-payer)"
   id: ID!
 
   # References
   "Signer"
   signer: GraphTallySigner!
   "Payer address"
-  payer: Bytes!
+  payer: Payer!
 
   # State
   "Current authorization status"
   authorized: Boolean!
   "Timestamp when thawing completes (0 if not thawing)"
   thawEndTimestamp: BigInt!
-}
-```
 
-### GraphTallyRAVCollection
-
-Record of a RAV redemption event.
-
-```graphql
-type GraphTallyRAVCollection @entity {
-  id: ID!
-
-  # References
-  "Payer address"
-  payer: Bytes!
-  "Service provider"
-  serviceProvider: ServiceProvider!
-  "Data service"
-  dataService: DataService!
-
-  # Details
-  "Collection ID"
-  collectionId: Bytes!
-  "Timestamp in nanoseconds"
-  timestampNs: BigInt!
-  "Cumulative payment amount"
-  valueAggregate: BigInt!
-  "Tokens collected in this redemption"
-  tokensCollected: BigInt!
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
 ```
 
@@ -627,9 +851,9 @@ type GraphTallyRAVCollection @entity {
 | `DelegatedTokensWithdrawn` | Update `Delegation`, `Delegator`, `DelegationPool`, `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
 | `TokensToDelegationPoolAdded` | Update `DelegationPool.tokens` |
 | `DelegationFeeCutSet` | Update fee cut fields on `Provision` |
-| `ThawRequestCreated` | Create `ThawRequest`, update counts on related entities |
-| `ThawRequestFulfilled` | Update `ThawRequest.fulfilled`, update counts |
-| `ThawRequestsFulfilled` | Batch update `ThawRequest` entities, update counts |
+| `ThawRequestCreated` | Create `ProvisionThawRequest` or `DelegationThawRequest`, update counts on related entities |
+| `ThawRequestFulfilled` | Update thaw request's `fulfilled` field, update counts |
+| `ThawRequestsFulfilled` | Batch update thaw request entities, update counts |
 | `OperatorSet` | Create/update `Operator`, `OperatorAuthorization` |
 | `MaxThawingPeriodSet` | Update `GraphNetwork.maxThawingPeriod` |
 | `DelegationSlashingEnabled` | Update `GraphNetwork.delegationSlashingEnabled` |
@@ -638,17 +862,17 @@ type GraphTallyRAVCollection @entity {
 
 | Event | Handler Action |
 |-------|----------------|
-| `GraphPaymentCollected` | Create `PaymentCollection`, update `GraphNetwork`, `ServiceProvider`, `DataService`, `Provision`, `DelegationPool` token aggregates |
+| `GraphPaymentCollected` | Update `GraphNetwork`, `ServiceProvider`, `DataService`, `Provision`, `DelegationPool` payment collection aggregates |
 
 ### PaymentsEscrow
 
 | Event | Handler Action |
 |-------|----------------|
-| `Deposit` | Create/update `EscrowAccount`, update `GraphNetwork.tokensEscrowed` |
-| `Thaw` | Update `EscrowAccount` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
-| `CancelThaw` | Reset `EscrowAccount` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
-| `Withdraw` | Update `EscrowAccount.tokens`, update `GraphNetwork.tokensEscrowed` |
-| `EscrowCollected` | Update `EscrowAccount.tokens`, update `GraphNetwork.tokensEscrowed` |
+| `Deposit` | Create/update `Payer`, `Collector`, `EscrowAccount`, update `GraphNetwork.tokensEscrowed` |
+| `Thaw` | Update `EscrowAccount`, `Payer`, `Collector` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
+| `CancelThaw` | Reset `EscrowAccount`, `Payer`, `Collector` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
+| `Withdraw` | Update `EscrowAccount`, `Payer`, `Collector`, `GraphNetwork.tokensEscrowed` |
+| `EscrowCollected` | Update `EscrowAccount`, `Payer`, `Collector`, `GraphNetwork.tokensEscrowed` |
 
 ### GraphTallyCollector
 
@@ -658,8 +882,6 @@ type GraphTallyRAVCollection @entity {
 | `SignerThawing` | Update `GraphTallySignerAuthorization.thawEndTimestamp` |
 | `SignerRevoked` | Update `GraphTallySignerAuthorization.authorized` |
 | `SignerThawCanceled` | Reset `GraphTallySignerAuthorization.thawEndTimestamp` |
-| `PaymentCollected` | Create `GraphTallyRAVCollection`, update `GraphNetwork.countRAVsCollected` |
-| `RAVCollected` | Update `GraphTallyRAVCollection` with RAV details |
 
 ### DataService (ProvisionManager)
 
