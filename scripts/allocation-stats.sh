@@ -41,7 +41,15 @@ while true; do
     -d "$payload" \
     "$ENDPOINT")
 
-  # Check for errors
+  # Check if response is valid JSON first
+  if ! echo "$response" | jq -e . > /dev/null 2>&1; then
+    echo "Error: Invalid JSON response from API"
+    echo "Raw response:"
+    echo "$response"
+    exit 1
+  fi
+
+  # Check for GraphQL errors
   if echo "$response" | jq -e '.errors' > /dev/null 2>&1; then
     echo "Error from API:"
     echo "$response" | jq '.errors'

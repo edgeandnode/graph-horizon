@@ -27,6 +27,12 @@ is_deployment_active() {
     echo "$output" | grep -q "Active.*true"
 }
 
+# Check if allocation is already queued (pending, queued, or approved status)
+is_allocation_already_queued() {
+    local alloc_id="$1"
+    echo "$ALREADY_QUEUED_ALLOCS" | grep -qi "$alloc_id"
+}
+
 echo -e "${YELLOW}=== Queue Reallocate Actions ===${NC}"
 echo "Network: $NETWORK"
 echo "Batch size: $BATCH_SIZE"
@@ -39,6 +45,37 @@ if [[ ! -f "$ALLOCATIONS_FILE" ]]; then
     echo -e "${RED}Error: Allocations file not found. Please provide a valid file path.${NC}"
     exit 1
 fi
+
+# Fetch already queued allocations (queued, approved, or pending status)
+echo "Fetching already queued allocations..."
+ALREADY_QUEUED_ALLOCS=""
+ACTIONS_TMPFILE=$(mktemp)
+for status in queued approved pending; do
+    if graph indexer actions get \
+        --network "$NETWORK" \
+        --status "$status" \
+        --type reallocate \
+        -o json > "$ACTIONS_TMPFILE" 2>/dev/null; then
+        if jq -e . "$ACTIONS_TMPFILE" >/dev/null 2>&1; then
+            BATCH_ALLOC_IDS=$(jq -r '.[].allocationID // empty' "$ACTIONS_TMPFILE" 2>/dev/null || echo "")
+            if [[ -n "$BATCH_ALLOC_IDS" ]]; then
+                if [[ -n "$ALREADY_QUEUED_ALLOCS" ]]; then
+                    ALREADY_QUEUED_ALLOCS="$ALREADY_QUEUED_ALLOCS"$'\n'"$BATCH_ALLOC_IDS"
+                else
+                    ALREADY_QUEUED_ALLOCS="$BATCH_ALLOC_IDS"
+                fi
+            fi
+        fi
+    fi
+done
+rm -f "$ACTIONS_TMPFILE"
+if [[ -z "$ALREADY_QUEUED_ALLOCS" ]]; then
+    ALREADY_QUEUED_COUNT=0
+else
+    ALREADY_QUEUED_COUNT=$(echo "$ALREADY_QUEUED_ALLOCS" | wc -l | tr -d ' ')
+fi
+echo "Found $ALREADY_QUEUED_COUNT allocations already queued"
+echo ""
 
 # Build list of previously skipped deployments
 if [[ -f "$SKIPPED_INACTIVE_LOG" ]]; then
@@ -59,13 +96,23 @@ echo ""
 # Clear queued deployments log for this batch
 > "$QUEUED_DEPLOYMENTS_LOG"
 
+# Track failures - use a temp file since we're in a subshell
+FAILURE_FLAG=$(mktemp)
+echo "0" > "$FAILURE_FLAG"
+
 # Queue each allocation
 echo "$BATCH_ALLOCS" | jq -c '.[]' | while read -r alloc; do
     DEPLOYMENT=$(echo "$alloc" | jq -r '.subgraphDeployment')
     ALLOC_ID=$(echo "$alloc" | jq -r '.id')
-    AMOUNT=$(echo "$alloc" | jq -r '.allocatedTokens')
+    AMOUNT=$(echo "$alloc" | jq -r '.allocatedTokens' | tr -d ',')
 
     echo -n "  $ALLOC_ID... "
+
+    # Check if allocation is already queued
+    if is_allocation_already_queued "$ALLOC_ID"; then
+        echo -e "${YELLOW}SKIPPED (already queued)${NC}"
+        continue
+    fi
 
     # Check if deployment is active before queueing
     if ! is_deployment_active "$DEPLOYMENT"; then
@@ -90,8 +137,19 @@ echo "$BATCH_ALLOCS" | jq -c '.[]' | while read -r alloc; do
         echo "$DEPLOYMENT" >> "$QUEUED_DEPLOYMENTS_LOG"
     else
         echo -e "${RED}FAILED${NC}"
+        echo "1" > "$FAILURE_FLAG"
+        break
     fi
 done
+
+# Check if there was a failure
+if [[ "$(cat "$FAILURE_FLAG")" == "1" ]]; then
+    rm -f "$FAILURE_FLAG"
+    echo ""
+    echo -e "${RED}=== ABORTED: Queue operation failed ===${NC}"
+    exit 1
+fi
+rm -f "$FAILURE_FLAG"
 
 # Count total skipped from log file
 TOTAL_SKIPPED=$(grep -c . "$SKIPPED_INACTIVE_LOG" 2>/dev/null || echo 0)

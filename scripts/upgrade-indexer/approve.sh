@@ -19,14 +19,29 @@ echo "Source: $SOURCE"
 echo ""
 
 # Get queued actions
+set +e
 RESULT=$(graph indexer actions get --status queued --source "$SOURCE" --network "$NETWORK" -o json 2>/dev/null)
+EXIT_CODE=$?
+set -e
 
-if [[ "$RESULT" == "No actions found" ]] || [[ -z "$RESULT" ]]; then
+if [[ $EXIT_CODE -ne 0 ]] || [[ "$RESULT" == "No actions found" ]] || [[ -z "$RESULT" ]] || [[ "$RESULT" == "[]" ]]; then
+    echo -e "${YELLOW}No queued actions to approve${NC}"
+    exit 0
+fi
+
+# Check if result is valid JSON
+if ! echo "$RESULT" | jq -e . >/dev/null 2>&1; then
     echo -e "${YELLOW}No queued actions to approve${NC}"
     exit 0
 fi
 
 QUEUED_COUNT=$(echo "$RESULT" | jq length)
+
+if [[ "$QUEUED_COUNT" -eq 0 ]]; then
+    echo -e "${YELLOW}No queued actions to approve${NC}"
+    exit 0
+fi
+
 echo "Found $QUEUED_COUNT queued actions to approve"
 
 # Get IDs and approve them
