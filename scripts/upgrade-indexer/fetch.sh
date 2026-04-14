@@ -18,7 +18,7 @@ if [ -f "$ALLOCATIONS_FILE" ]; then
 fi
 
 # Fetch active allocations and save to JSON file
-graph indexer allocations --network "$NETWORK" get --status active --output json > "$ALLOCATIONS_FILE"
+graph-indexer indexer allocations --network "$NETWORK" get --status active --output json > "$ALLOCATIONS_FILE"
 
 echo "Saved allocations to $ALLOCATIONS_FILE"
 

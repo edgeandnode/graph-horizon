@@ -3,9 +3,8 @@
 ```bash
 cd scripts/upgrade-indexer
 
-kubectl exec -ti shell-0 -- bash -s < setup.sh
-kubectl cp . shell-0:/
-kubectl exec shell-0 -- bash -c 'chmod +x /*.sh'
+kubectl exec -ti shell-0 -c indexer-cli -- bash -s < setup.sh
+kubectl cp . shell-0:/ && kubectl exec shell-0 -- bash -c 'chmod +x /*.sh'
 kubectl exec -ti shell-0 -- env BATCH_SIZE=2 bash -s < migrate.sh
 ```
 
@@ -51,6 +50,11 @@ kubectl exec -ti shell-0 -- env DRY_RUN=false bash -s < close-duplicates.sh
 ```bash
 kubectl cp allos-snapshot-before.json shell-0:/allos-snapshot-before.json
 kubectl exec -ti shell-0 -- env AFTER=allocations.json bash -s < create-lost.sh
+```
+### Recreate skipped allocations log
+
+```bash
+ kubectl exec -ti shell-0 -- bash -s < recreate-skipped.sh
 ```
 
 ### Other useful commands

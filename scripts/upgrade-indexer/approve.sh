@@ -20,7 +20,7 @@ echo ""
 
 # Get queued actions
 set +e
-RESULT=$(graph indexer actions get --status queued --source "$SOURCE" --network "$NETWORK" -o json 2>/dev/null)
+RESULT=$(graph-indexer indexer actions get --status queued --source "$SOURCE" --network "$NETWORK" -o json 2>/dev/null)
 EXIT_CODE=$?
 set -e
 
@@ -47,7 +47,7 @@ echo "Found $QUEUED_COUNT queued actions to approve"
 # Get IDs and approve them
 APPROVE_IDS=$(echo "$RESULT" | jq -r '.[].id' | tr '\n' ' ')
 
-if graph indexer actions approve $APPROVE_IDS > /dev/null 2>&1; then
+if graph-indexer indexer actions approve $APPROVE_IDS > /dev/null 2>&1; then
     echo -e "${GREEN}Approved $QUEUED_COUNT actions${NC}"
 else
     echo -e "${RED}Failed to approve some actions${NC}"

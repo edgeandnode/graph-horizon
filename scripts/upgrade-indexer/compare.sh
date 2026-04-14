@@ -127,6 +127,10 @@ fi
 
 if [[ "$LOST_NOT_ALLOWED_COUNT" -ne 0 ]]; then
     echo -e "${RED}SANITY CHECK FAILED: Legacy closed without Horizon replacement ($LOST_NOT_ALLOWED_COUNT not in allowlist) != 0${NC}"
+    echo -e "${RED}Deployments not in allowlist:${NC}"
+    echo "$LOST_NOT_ALLOWED" | while IFS=$'\t' read -r deployment id; do
+        echo "  $deployment ($id)"
+    done
     FAILED=1
 fi
 
