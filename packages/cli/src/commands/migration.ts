@@ -29,6 +29,29 @@ export const fetchIndexerVersion = (indexer: { url: string }) =>
     )
   )
 
+export const fetchGraphNodeVersion = (indexer: { url: string }) =>
+  Effect.tryPromise({
+    try: async () => {
+      const url = new URL(indexer.url)
+      url.pathname = "/status"
+      const res = await fetch(url.toString(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "{ version { version } }" })
+      })
+      if (!res.ok) throw new Error(`Failed to fetch ${indexer.url}/status: ${res.status}`)
+      const data = await res.json()
+      return data?.data?.version?.version ?? null
+    },
+    catch: (error) => new Error(String(error))
+  }).pipe(
+    Effect.retry(
+      Schedule.exponential(RETRY_BASE_DELAY_MS).pipe(
+        Schedule.compose(Schedule.recurs(RETRY_COUNT))
+      )
+    )
+  )
+
 const migratedOnly = Options.boolean("migrated-only").pipe(
   Options.withDescription("Only show indexers that have migrated to Horizon")
 )
@@ -56,9 +79,8 @@ export const migration = Command.make(
         indexer.allocations.length > 0
       ).length
 
-      const lastMonth = Math.floor((new Date().setMonth(new Date().getMonth() - 1)) / 1000)
       const activeIndexers = indexerListResult.indexers.filter((indexer) =>
-        indexer.allocations.some((allocation: { createdAt: number }) => allocation.createdAt > lastMonth)
+        indexer.allocations.some((allocation: { status: string }) => allocation.status === "Active")
       )
 
       const migratedIndexers = activeIndexers.filter((indexer) =>
@@ -79,28 +101,36 @@ export const migration = Command.make(
         indexersWithURL,
         (indexer) =>
           Effect.gen(function*() {
-            const versionResponse = yield* fetchIndexerVersion(indexer).pipe(
-              Effect.catchAll((error) => Effect.succeed(`Error: ${error.message} for ${indexer.url}`))
-            )
+            const [versionResponse, graphNodeVersion] = yield* Effect.all([
+              fetchIndexerVersion(indexer).pipe(
+                Effect.catchAll((error) => Effect.succeed(`Error: ${error.message} for ${indexer.url}`))
+              ),
+              fetchGraphNodeVersion(indexer).pipe(
+                Effect.catchAll(() => Effect.succeed(null))
+              )
+            ], { concurrency: "unbounded" })
+
             let version = null
             try {
               version = JSON.parse(versionResponse).version
             } catch { /* empty */ }
+
             return {
               ...indexer,
-              version
+              version,
+              graphNodeVersion
             }
           }),
         { concurrency: "unbounded" }
       )
 
-      const unreachableActiveIndexers = activeIndexersWithVersions.filter((indexer) => indexer.version === null)
-      const reachableActiveIndexers = activeIndexersWithVersions.filter((indexer) => indexer.version !== null)
+      const unreachableActiveIndexers = activeIndexersWithVersions.filter((indexer) => !indexer.version)
+      const reachableActiveIndexers = activeIndexersWithVersions.filter((indexer) => !!indexer.version)
 
       yield* Display.section("Indexers by activity")
       yield* Display.keyValue("Total Indexers", indexerCount)
       yield* Display.keyValue("Indexers with allocations", indexerWithAllocationsCount)
-      yield* Display.keyValue("Active Indexers (last month)", activeIndexers.length)
+      yield* Display.keyValue("Active Indexers", activeIndexers.length)
 
       yield* Display.section("Active indexers by migration status")
       yield* Display.keyValue("Migrated indexers", migratedIndexers.length)
@@ -199,7 +229,7 @@ export const migration = Command.make(
       // Filter indexers if --migrated-only flag is set (version >= 1.7.0)
       const indexersToDisplay = migratedOnly
         ? activeIndexersWithVersions.filter((indexer) =>
-          indexer.version !== null && compareVersions(indexer.version, HORIZON_VERSION) >= 0
+          !!indexer.version && compareVersions(indexer.version, HORIZON_VERSION) >= 0
         )
         : activeIndexersWithVersions
 
@@ -261,11 +291,12 @@ export const migration = Command.make(
             ? `${((Number(provisioned) / Number(staked)) * 100).toFixed(2)}%`
             : "N/A"
 
-          yield* Display.fiveString(
+          yield* Display.sixString(
             indexer.id,
             queryPct,
             stakePct,
             formatGRT(staked),
+            indexer.graphNodeVersion ?? "N/A",
             indexer.url ?? "N/A"
           )
         }
