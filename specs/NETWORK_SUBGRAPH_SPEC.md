@@ -2,6 +2,8 @@
 
 A subgraph for indexing The Graph protocol's core staking and payments infrastructure.
 
+This is an **aggregate state subgraph** - it tracks current state (balances, counts, parameters) rather than historical events. Entities are updated in place as events occur. Historical event tracking (e.g., individual stake deposits, slash events over time) is out of scope for the time being.
+
 ## Overview
 
 This subgraph indexes the Horizon protocol contracts to provide queryable data about:
@@ -9,10 +11,11 @@ This subgraph indexes the Horizon protocol contracts to provide queryable data a
 - Delegations and delegation pools
 - Thaw requests (deprovisioning and undelegating)
 - Payment collections and escrow
-- Payment collectors: GraphTally
 - Operators
 
-The subgraph is **data-service agnostic** - it captures the concept of data services (verifiers) but contains nothing specific to any particular data service. Each data service can create their own subgraph for service-specific data.
+The subgraph is **data-service** and **collector** agnostic:
+- Data services are discovered dynamically via staking events, but no data-service-specific parameters are tracked. Each data service can create their own subgraph for service-specific data.
+- Collectors are discovered via escrow events. Collector-specific logic (e.g., signer authorizations) should be handled by collector-specific subgraphs (To be determined in the future if this will be included in this subgraph).
 
 ## Data Sources
 
@@ -23,7 +26,6 @@ The subgraph is **data-service agnostic** - it captures the concept of data serv
 | `HorizonStaking` | Core staking, provisions, delegations, slashing |
 | `GraphPayments` | Payment distribution |
 | `PaymentsEscrow` | Escrow account management |
-| `GraphTallyCollector` | RAV-based payment collection and signer authorization |
 
 ## Entities
 
@@ -97,12 +99,12 @@ type GraphNetwork @entity {
   delegationSlashingEnabled: Boolean!
 
   # Protocol parameters (immutable)
+  # Note: These are constructor parameters with no setter events.
+  # Initialize via contract calls on subgraph deployment (e.g., in a block handler at start block).
   "Protocol tax on payments collected (PPM)"
   protocolPaymentCut: BigInt!
   "Withdrawal thawing period for payments escrow (seconds)"
   escrowThawingPeriod: BigInt!
-  "Signer revocation thawing period for payments escrow (seconds)"
-  revokeSignerThawingPeriod: BigInt!
 }
 ```
 
@@ -254,22 +256,6 @@ type DataService @entity {
   "Tokens kept by the data service"
   tokensDistributedToDataService: BigInt!
 
-  # Parameters
-  "Max delegation multiplier on service provider stake"
-  delegationRatio: BigInt!
-  "Minimum tokens required for a provision"
-  minProvisionTokens: BigInt!
-  "Maximum tokens allowed for a provision"
-  maxProvisionTokens: BigInt!
-  "Minimum verifier cut (PPM)"
-  minVerifierCut: BigInt!
-  "Maximum verifier cut (PPM)"
-  maxVerifierCut: BigInt!
-  "Minimum thawing period (seconds)"
-  minThawingPeriod: BigInt!
-  "Maximum thawing period (seconds)"
-  maxThawingPeriod: BigInt!
-
   # Metadata
   "Block number when entity was created"
   createdAtBlock: BigInt!
@@ -350,12 +336,8 @@ type Provision @entity {
   lastParametersStagedAt: BigInt!
 
   # Fee cuts
-  "Query fee cut for delegators (PPM)"
-  queryFeeCut: BigInt!
-  "Indexing fee cut for delegators (PPM)"
-  indexingFeeCut: BigInt!
-  "Indexing reward cut for delegators (PPM)"
-  indexingRewardCut: BigInt!
+  "Fee cuts for delegators by payment type"
+  feeCuts: [ProvisionFeeCut!]! @derivedFrom(field: "provision")
 
   # State
   "Thawing nonce - incremented on slash to invalidate pending thaw requests"
@@ -373,13 +355,40 @@ type Provision @entity {
 }
 ```
 
+### ProvisionFeeCut
+
+Fee cut percentage for a specific payment type on a provision.
+
+```graphql
+type ProvisionFeeCut @entity {
+  "Concatenation of provision ID and payment type"
+  id: Bytes!
+
+  # References
+  "Provision this fee cut belongs to"
+  provision: Provision!
+
+  # State
+  "Payment type (maps to PaymentTypes enum: 0 = QueryFee, 1 = IndexingFee, 2 = IndexingReward, ...)"
+  paymentType: Int!
+  "Fee cut percentage (PPM)"
+  feeCut: BigInt!
+
+  # Metadata
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+```
+
 ### ProvisionThawRequest
 
 Pending deprovision request to remove stake from a provision.
 
 ```graphql
 type ProvisionThawRequest @entity {
-  "Thaw request ID from contract event"
+  "Thaw request ID (bytes32) emitted by ThawRequestCreated event - globally unique"
   id: Bytes!
 
   # References
@@ -397,6 +406,8 @@ type ProvisionThawRequest @entity {
   thawingUntil: BigInt!
   "Thawing nonce at time of creation"
   thawingNonce: BigInt!
+  "Tokens withdrawn (set on fulfillment, null while pending)"
+  tokensWithdrawn: BigInt
 
   # Status
   "False if invalidated by slashing"
@@ -458,7 +469,7 @@ type DelegationPool @entity {
   sharesThawing: BigInt!
   "Total tokens slashed"
   tokensSlashed: BigInt!
-  "Total tokens collected by delegators"
+  "Tokens distributed to this pool from payment collections"
   tokensCollected: BigInt!
 
   # State
@@ -571,7 +582,7 @@ Pending undelegation request to remove stake from a delegation.
 
 ```graphql
 type DelegationThawRequest @entity {
-  "Thaw request ID from contract event"
+  "Thaw request ID (bytes32) emitted by ThawRequestCreated event - globally unique"
   id: Bytes!
 
   # References
@@ -593,6 +604,8 @@ type DelegationThawRequest @entity {
   thawingUntil: BigInt!
   "Thawing nonce at time of creation"
   thawingNonce: BigInt!
+  "Tokens withdrawn (set on fulfillment, null while pending)"
+  tokensWithdrawn: BigInt
 
   # Status
   "False if invalidated by slashing"
@@ -686,14 +699,10 @@ type Payer @entity {
   # Relationships
   "Escrow accounts funded by this payer"
   escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "payer")
-  "GraphTally signer authorizations for this payer"
-  signerAuthorizations: [GraphTallySignerAuthorization!]! @derivedFrom(field: "payer")
 
   # Counts
   "Active escrow accounts"
   countEscrowAccounts: Int!
-  "Active signer authorizations"
-  countSignerAuthorizations: Int!
 
   # Tokens
   "Total tokens in escrow"
@@ -717,7 +726,7 @@ type Payer @entity {
 
 ### Collector
 
-A contract that facilitates payment collection through GraphPayments (e.g., GraphTallyCollector).
+A contract that facilitates payment collection through GraphPayments.
 
 ```graphql
 type Collector @entity {
@@ -776,6 +785,8 @@ type EscrowAccount @entity {
   tokensThawing: BigInt!
   "Timestamp when thawing completes (0 if not thawing)"
   thawEndTimestamp: BigInt!
+  "Total tokens collected from this escrow account"
+  tokensCollected: BigInt!
 
   # Metadata
   "Block number when entity was created"
@@ -789,67 +800,27 @@ type EscrowAccount @entity {
 }
 ```
 
-### GraphTallySigner
+## Entity Lifecycle
 
-An account authorized to sign RAVs on behalf of payers.
+This section documents when each entity is created during indexing.
 
-```graphql
-type GraphTallySigner @entity {
-  "Signer address"
-  id: Bytes!
-
-  # Relationships
-  "Authorizations granted to this signer"
-  authorizations: [GraphTallySignerAuthorization!]! @derivedFrom(field: "signer")
-
-  # Counts
-  "Active authorizations"
-  countAuthorizations: Int!
-
-  # Metadata
-  "Block number when entity was created"
-  createdAtBlock: BigInt!
-  "Timestamp when entity was created"
-  createdAt: BigInt!
-  "Block number when entity was last updated"
-  updatedAtBlock: BigInt!
-  "Timestamp when entity was last updated"
-  updatedAt: BigInt!
-}
-```
-
-### GraphTallySignerAuthorization
-
-Authorization for a signer to sign RAVs on behalf of a payer.
-
-```graphql
-type GraphTallySignerAuthorization @entity {
-  "Concatenation of signer and payer addresses"
-  id: Bytes!
-
-  # References
-  "Signer"
-  signer: GraphTallySigner!
-  "Payer address"
-  payer: Payer!
-
-  # State
-  "Current authorization status"
-  authorized: Boolean!
-  "Timestamp when thawing completes (0 if not thawing)"
-  thawEndTimestamp: BigInt!
-
-  # Metadata
-  "Block number when entity was created"
-  createdAtBlock: BigInt!
-  "Timestamp when entity was created"
-  createdAt: BigInt!
-  "Block number when entity was last updated"
-  updatedAtBlock: BigInt!
-  "Timestamp when entity was last updated"
-  updatedAt: BigInt!
-}
-```
+| Entity | Created When |
+|--------|--------------|
+| `GraphNetwork` | First event handler that accesses it (singleton with fixed ID) |
+| `ServiceProvider` | First `HorizonStakeDeposited` event for that address |
+| `DataService` | First `ProvisionCreated` event that references it as verifier |
+| `Provision` | `ProvisionCreated` event |
+| `ProvisionFeeCut` | First `DelegationFeeCutSet` event for that provision + payment type |
+| `ProvisionThawRequest` | `ThawRequestCreated` event (when type = Provision) |
+| `DelegationPool` | `ProvisionCreated` event (created alongside Provision) |
+| `Delegator` | First `TokensDelegated` event for that delegator address |
+| `Delegation` | First `TokensDelegated` event for that delegator + service provider + data service |
+| `DelegationThawRequest` | `ThawRequestCreated` event (when type = Delegation) |
+| `Operator` | First `OperatorSet` event that references it as operator |
+| `OperatorAuthorization` | First `OperatorSet` event for that operator + service provider + data service |
+| `Payer` | First `Deposit` event for that payer address |
+| `Collector` | First `Deposit` event that references it as collector |
+| `EscrowAccount` | First `Deposit` event for that payer + collector + service provider |
 
 ## Event Handlers
 
@@ -857,7 +828,7 @@ type GraphTallySignerAuthorization @entity {
 
 | Event | Handler Action |
 |-------|----------------|
-| `HorizonStakeDeposited` | Update `ServiceProvider.tokensStaked`, `GraphNetwork.tokensStaked` |
+| `HorizonStakeDeposited` | Create/update `ServiceProvider`, update `GraphNetwork.tokensStaked` |
 | `HorizonStakeLocked` | Update `ServiceProvider` |
 | `HorizonStakeWithdrawn` | Update `ServiceProvider.tokensStaked`, `GraphNetwork.tokensStaked` |
 | `ProvisionCreated` | Create `Provision`, `DelegationPool`, update `ServiceProvider`, `DataService`, `GraphNetwork` |
@@ -874,7 +845,7 @@ type GraphTallySignerAuthorization @entity {
 | `TokensUndelegated` | Update `Delegation`, `Delegator`, `DelegationPool` thawing fields |
 | `DelegatedTokensWithdrawn` | Update `Delegation`, `Delegator`, `DelegationPool`, `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
 | `TokensToDelegationPoolAdded` | Update `DelegationPool.tokens` |
-| `DelegationFeeCutSet` | Update fee cut fields on `Provision` |
+| `DelegationFeeCutSet` | Create/update `ProvisionFeeCut` for the payment type |
 | `ThawRequestCreated` | Create `ProvisionThawRequest` or `DelegationThawRequest`, update counts on related entities |
 | `ThawRequestFulfilled` | Update thaw request's `fulfilled` field, update counts |
 | `ThawRequestsFulfilled` | Batch update thaw request entities, update counts |
@@ -896,22 +867,44 @@ type GraphTallySignerAuthorization @entity {
 | `Thaw` | Update `EscrowAccount`, `Payer`, `Collector` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
 | `CancelThaw` | Reset `EscrowAccount`, `Payer`, `Collector` thawing fields, update `GraphNetwork.tokensThawingFromEscrow` |
 | `Withdraw` | Update `EscrowAccount`, `Payer`, `Collector`, `GraphNetwork.tokensEscrowed` |
-| `EscrowCollected` | Update `EscrowAccount`, `Payer`, `Collector`, `GraphNetwork.tokensEscrowed` |
+| `EscrowCollected` | Update `EscrowAccount`, `Payer`, `Collector` (including `tokensCollected`), update `GraphNetwork.tokensEscrowed` |
 
-### GraphTallyCollector
+## Implementation Notes
 
-| Event | Handler Action |
-|-------|----------------|
-| `SignerAuthorized` | Create/update `GraphTallySigner`, `GraphTallySignerAuthorization` |
-| `SignerThawing` | Update `GraphTallySignerAuthorization.thawEndTimestamp` |
-| `SignerRevoked` | Update `GraphTallySignerAuthorization.authorized` |
-| `SignerThawCanceled` | Reset `GraphTallySignerAuthorization.thawEndTimestamp` |
+This section captures implementation patterns and technical details for subgraph developers.
 
-### DataService (ProvisionManager)
+### Entity Creation Pattern
 
-| Event | Handler Action |
-|-------|----------------|
-| `ProvisionTokensRangeSet` | Update `DataService.minProvisionTokens`, `DataService.maxProvisionTokens` |
-| `DelegationRatioSet` | Update `DataService.delegationRatio` |
-| `VerifierCutRangeSet` | Update `DataService.minVerifierCut`, `DataService.maxVerifierCut` |
-| `ThawingPeriodRangeSet` | Update `DataService.minThawingPeriod`, `DataService.maxThawingPeriod` |
+Use a `createOrLoad` pattern for all entities. This provides defensive, lazy initialization:
+
+```typescript
+export function createOrLoadServiceProvider(id: Bytes): ServiceProvider {
+  let entity = ServiceProvider.load(id)
+  if (entity == null) {
+    entity = new ServiceProvider(id)
+    // Initialize all fields with default values
+    entity.tokensStaked = BigInt.zero()
+    entity.countProvisions = 0
+    // ... etc
+    entity.save()
+  }
+  return entity
+}
+```
+
+Benefits:
+- Handlers don't need to know if an entity exists
+- Consistent pattern across all entities
+- Encapsulates initialization logic in reusable helpers
+
+### GraphNetwork Singleton
+
+The `GraphNetwork` entity is a singleton with a fixed ID. Load it at the start of handlers that need protocol-wide state:
+
+```typescript
+let graphNetwork = createOrLoadGraphNetwork()
+// Update fields...
+graphNetwork.save()
+```
+
+Immutable protocol parameters (`protocolPaymentCut`, `escrowThawingPeriod`) have no setter events. Initialize them via contract calls within the `createOrLoadGraphNetwork()` helper on first access.
