@@ -92,6 +92,23 @@ export class Display {
     return Console.log(`  ${formattedFirst} ${formattedSecond} ${formattedThird} ${formattedFourth} ${formattedFifth}`)
   }
 
+  static sixString(
+    first: string,
+    second: string,
+    third: string,
+    fourth: string,
+    fifth: string,
+    sixth: string
+  ): Effect.Effect<void, never> {
+    const formattedFirst = Display.colorize(first.padEnd(44), "cyan")
+    const formattedSecond = Display.colorize(second.padEnd(10), "blue")
+    const formattedThird = Display.colorize(third.padEnd(10), "green")
+    const formattedFourth = Display.colorize(fourth.padEnd(12), "yellow")
+    const formattedFifth = Display.colorize(fifth.padEnd(10), "magenta")
+    const formattedSixth = Display.colorize(sixth.padEnd(30), "white")
+    return Console.log(`  ${formattedFirst} ${formattedSecond} ${formattedThird} ${formattedFourth} ${formattedFifth} ${formattedSixth}`)
+  }
+
   static section(title: string): Effect.Effect<void, never> {
     return Effect.gen(function*() {
       yield* Console.log("")
