@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebSearch",
+      "Bash(git clone:*)",
+      "WebFetch(domain:thegraph.academy)",
+      "WebFetch(domain:thegraph.com)"
     ]
   }
 }
