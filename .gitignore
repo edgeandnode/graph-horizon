@@ -145,3 +145,7 @@ dist
 
 # macOS crap
 .DS_Store
+
+# subgraphs
+generated
+build

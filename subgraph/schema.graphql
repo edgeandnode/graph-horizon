@@ -1,0 +1,4 @@
+type GraphNetwork @entity(immutable: false) {
+  "Singleton entity, always '1'"
+  id: Bytes!
+}
