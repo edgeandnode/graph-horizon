@@ -51,12 +51,21 @@ The `HorizonStaking` contract provides these view functions:
 | `ServiceProvider.tokensStaked` | `getStake(address serviceProvider)` | `uint256` |
 | `ServiceProvider.tokensIdle` | `getIdleStake(address serviceProvider)` | `uint256` |
 
-The `GraphNetwork` aggregate fields don't have direct contract calls. Instead, they are tallied incrementally:
+### Migration Approach: Proactive Seeding with Contract Calls
 
-- **`GraphNetwork.tokensStaked`**: When a service provider is first encountered via any Horizon event, call `getStake()` and add the result to the running total.
-- **`GraphNetwork.countServiceProviders`**: Increment when a new service provider entity is created.
+There are ~180 service providers. This is small enough to seed proactively at the start block.
 
-This approach means `GraphNetwork` totals will converge to correct values as service providers interact with Horizon. Providers who never interact with Horizon won't be counted, but this is acceptable since they're not active participants.
+**Approach:**
+1. Hardcode the list of 180 service provider addresses in the subgraph
+2. Use a block handler (triggered once at start block) to seed all entities
+3. Fetch `tokensStaked` and `tokensIdle` via contract calls for fresh values
+4. Tally `GraphNetwork` totals during seeding
+
+**Benefits:**
+- Correct `GraphNetwork.tokensStaked` and `countServiceProviders` from block 1
+- Fresh values from contract state (not stale snapshot)
+- Deterministic (same addresses indexed every time)
+- 180 contract calls is negligible overhead (one-time)
 
 ## 2. Delegation
 
@@ -264,8 +273,8 @@ If capturing providers who never interact with Horizon is important, a hardcoded
 
 1. What is the exact Subgraph Service address?
 2. What is the Horizon deployment block number?
-3. Is capturing inactive providers (who never interact with Horizon) a requirement?
-4. If proactive seeding is needed, what's the best source for the address list?
+3. ~~Is capturing inactive providers (who never interact with Horizon) a requirement?~~ **Decided:** Yes, proactive seeding for all ~180 service providers.
+4. ~~If proactive seeding is needed, what's the best source for the address list?~~ **Decided:** Query old subgraph or protocol team records.
 
 ## Next Steps
 
