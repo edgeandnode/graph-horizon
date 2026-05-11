@@ -15,7 +15,11 @@
       "Bash(git checkout:*)",
       "Bash(git stash:*)",
       "Bash(chmod:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(pnpm install)",
+      "Bash(pnpm --filter @graphprotocol/graph-horizon-subgraph codegen:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm --filter @graphprotocol/graph-horizon-subgraph test)"
     ]
   }
 }
