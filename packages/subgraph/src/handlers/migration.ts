@@ -1,7 +1,7 @@
 import { ethereum, Address, log } from "@graphprotocol/graph-ts"
 import { HorizonStaking } from "../../generated/HorizonStaking/HorizonStaking"
-import { getOrCreateGraphNetwork } from "../entities/graphNetwork"
-import { getOrCreateServiceProvider } from "../entities/serviceProvider"
+import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
+import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
 import { config } from "../config"
 import { NetworkConfig } from "../config/types"
 
@@ -30,7 +30,7 @@ export function migrateServiceProviders(block: ethereum.Block, networkConfig: Ne
 
   // Skip if no service providers to migrate
   if (networkConfig.serviceProviderAddresses.length == 0) {
-    graphNetwork.save()
+    saveGraphNetwork(graphNetwork)
     return
   }
 
@@ -48,19 +48,16 @@ export function migrateServiceProviders(block: ethereum.Block, networkConfig: Ne
     let tokensStaked = stakeResult.value
 
     // Create service provider
-    let serviceProvider = getOrCreateServiceProvider(address, block.number, block.timestamp)
-    assert(serviceProvider.isNew, "Service provider already exists")
-    serviceProvider.entity.tokensStaked = tokensStaked
-    // TODO: Set tokensIdle and tokensProvisioned when provision handlers are implemented
-    // let idleResult = stakingContract.try_getIdleStake(address)
-    // serviceProvider.entity.tokensIdle = idleResult.value
-    // serviceProvider.entity.tokensProvisioned = tokensStaked.minus(idleResult.value)
-    serviceProvider.entity.save()
+    let sp = getOrCreateServiceProvider(address, block.number, block.timestamp)
+    assert(sp.isNew, "Service provider already exists.")
+    sp.entity.tokensStaked = tokensStaked
+    sp.entity.tokensIdle = tokensStaked // No provisions at migration, so all stake is idle
+    saveServiceProvider(sp.entity, block)
 
     // Update graph network totals
     graphNetwork.tokensStaked = graphNetwork.tokensStaked.plus(tokensStaked)
     graphNetwork.countServiceProviders += 1
   }
 
-  graphNetwork.save()
+  saveGraphNetwork(graphNetwork)
 }

@@ -14,6 +14,7 @@ import {
   ProvisionSlashed,
   ProvisionParametersStaged,
   ProvisionParametersSet,
+  TokensDeprovisioned,
   HorizonStakeDeposited
 } from "../generated/HorizonStaking/HorizonStaking"
 import {
@@ -22,7 +23,8 @@ import {
   handleProvisionThawed,
   handleProvisionSlashed,
   handleProvisionParametersStaged,
-  handleProvisionParametersSet
+  handleProvisionParametersSet,
+  handleTokensDeprovisioned
 } from "../src/handlers/provision"
 import { handleHorizonStakeDeposited } from "../src/handlers/staking"
 import { GRAPH_NETWORK_ID } from "../src/common/constants"
@@ -148,6 +150,22 @@ function createProvisionParametersSetEvent(
   return event
 }
 
+// Helper to create TokensDeprovisioned event
+function createTokensDeprovisionedEvent(
+  serviceProvider: Address,
+  verifier: Address,
+  tokens: BigInt
+): TokensDeprovisioned {
+  let event = newTypedMockEvent<TokensDeprovisioned>()
+  event.parameters = new Array()
+  event.parameters.push(new ethereum.EventParam("serviceProvider", ethereum.Value.fromAddress(serviceProvider)))
+  event.parameters.push(new ethereum.EventParam("verifier", ethereum.Value.fromAddress(verifier)))
+  event.parameters.push(new ethereum.EventParam("tokens", ethereum.Value.fromUnsignedBigInt(tokens)))
+  event.block.number = BigInt.fromI32(800)
+  event.block.timestamp = BigInt.fromI32(8000)
+  return event
+}
+
 function getProvisionIdString(sp: Address, verifier: Address): string {
   return getProvisionId(Bytes.fromHexString(sp.toHexString()), Bytes.fromHexString(verifier.toHexString())).toHexString()
 }
@@ -179,6 +197,9 @@ describe("ProvisionCreated", () => {
     assert.fieldEquals("Provision", provisionId, "tokensThawing", "0")
     assert.fieldEquals("Provision", provisionId, "maxVerifierCut", maxVerifierCut.toString())
     assert.fieldEquals("Provision", provisionId, "thawingPeriod", thawingPeriod.toString())
+    // Pending values should equal current values on creation
+    assert.fieldEquals("Provision", provisionId, "maxVerifierCutPending", maxVerifierCut.toString())
+    assert.fieldEquals("Provision", provisionId, "thawingPeriodPending", thawingPeriod.toString())
     assert.fieldEquals("Provision", provisionId, "createdAtBlock", "200")
     assert.fieldEquals("Provision", provisionId, "createdAt", "2000")
 
@@ -257,7 +278,7 @@ describe("ProvisionThawed", () => {
     clearStore()
   })
 
-  test("moves tokens from provision to thawing", () => {
+  test("moves tokens from active to thawing (tokensProvisioned unchanged)", () => {
     // Setup: deposit and create provision
     let stakeTokens = BigInt.fromString("10000000000000000000000") // 10000 GRT
     let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
@@ -273,12 +294,55 @@ describe("ProvisionThawed", () => {
     handleProvisionThawed(event)
 
     let provisionId = getProvisionIdString(SP_ADDRESS, VERIFIER_ADDRESS)
-    let remainingTokens = provisionTokens.minus(thawAmount)
+    let remainingActiveTokens = provisionTokens.minus(thawAmount)
 
-    assert.fieldEquals("Provision", provisionId, "tokens", remainingTokens.toString())
+    // Provision: tokens move from active to thawing
+    assert.fieldEquals("Provision", provisionId, "tokens", remainingActiveTokens.toString())
     assert.fieldEquals("Provision", provisionId, "tokensThawing", thawAmount.toString())
-    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", remainingTokens.toString())
-    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensProvisioned", remainingTokens.toString())
+
+    // ServiceProvider & GraphNetwork: tokensProvisioned unchanged (thawing tokens still count as provisioned)
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", provisionTokens.toString())
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensProvisioned", provisionTokens.toString())
+  })
+})
+
+describe("TokensDeprovisioned", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  test("removes thawed tokens and decrements tokensProvisioned", () => {
+    // Setup: deposit, create provision, thaw tokens
+    let stakeTokens = BigInt.fromString("10000000000000000000000") // 10000 GRT
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
+    handleHorizonStakeDeposited(depositEvent)
+
+    let provisionTokens = BigInt.fromString("5000000000000000000000") // 5000 GRT
+    let createEvent = createProvisionCreatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, provisionTokens, BigInt.fromI32(100000), BigInt.fromI32(2592000))
+    handleProvisionCreated(createEvent)
+
+    let thawAmount = BigInt.fromString("2000000000000000000000") // 2000 GRT
+    let thawEvent = createProvisionThawedEvent(SP_ADDRESS, VERIFIER_ADDRESS, thawAmount)
+    handleProvisionThawed(thawEvent)
+
+    // Deprovision the thawed tokens
+    let event = createTokensDeprovisionedEvent(SP_ADDRESS, VERIFIER_ADDRESS, thawAmount)
+    handleTokensDeprovisioned(event)
+
+    let provisionId = getProvisionIdString(SP_ADDRESS, VERIFIER_ADDRESS)
+    let remainingActiveTokens = provisionTokens.minus(thawAmount)
+    let expectedIdle = stakeTokens.minus(remainingActiveTokens)
+
+    // Provision: tokensThawing should be zero
+    assert.fieldEquals("Provision", provisionId, "tokens", remainingActiveTokens.toString())
+    assert.fieldEquals("Provision", provisionId, "tokensThawing", "0")
+
+    // ServiceProvider: tokensProvisioned decremented, tokensIdle increased
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", remainingActiveTokens.toString())
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", expectedIdle.toString())
+
+    // GraphNetwork: tokensProvisioned decremented
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensProvisioned", remainingActiveTokens.toString())
   })
 })
 
@@ -389,8 +453,83 @@ describe("ProvisionParametersSet", () => {
     assert.fieldEquals("Provision", provisionId, "maxVerifierCut", newMaxCut.toString())
     assert.fieldEquals("Provision", provisionId, "thawingPeriod", newThawing.toString())
 
-    // Pending parameters cleared
-    assert.fieldEquals("Provision", provisionId, "maxVerifierCutPending", "0")
-    assert.fieldEquals("Provision", provisionId, "thawingPeriodPending", "0")
+    // Pending parameters now equal current (never zero)
+    assert.fieldEquals("Provision", provisionId, "maxVerifierCutPending", newMaxCut.toString())
+    assert.fieldEquals("Provision", provisionId, "thawingPeriodPending", newThawing.toString())
+  })
+})
+
+describe("tokensIdle lifecycle", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  test("tracks tokensIdle correctly through full lifecycle", () => {
+    // 1. Deposit 10000 GRT - tokensIdle should be 10000
+    let stakeTokens = BigInt.fromString("10000000000000000000000") // 10000 GRT
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
+    handleHorizonStakeDeposited(depositEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "10000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "0")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "10000000000000000000000")
+
+    // 2. Create provision with 4000 GRT - tokensIdle should be 6000
+    let provisionTokens = BigInt.fromString("4000000000000000000000") // 4000 GRT
+    let createEvent = createProvisionCreatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, provisionTokens, BigInt.fromI32(100000), BigInt.fromI32(2592000))
+    handleProvisionCreated(createEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "10000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "4000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "6000000000000000000000")
+
+    // 3. Increase provision by 2000 GRT - tokensIdle should be 4000
+    let increaseAmount = BigInt.fromString("2000000000000000000000") // 2000 GRT
+    let increaseEvent = createProvisionIncreasedEvent(SP_ADDRESS, VERIFIER_ADDRESS, increaseAmount)
+    handleProvisionIncreased(increaseEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "10000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "6000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "4000000000000000000000")
+
+    // 4. Thaw 1000 GRT - tokensProvisioned stays 6000 (thawing tokens still count as provisioned)
+    let thawAmount = BigInt.fromString("1000000000000000000000") // 1000 GRT
+    let thawEvent = createProvisionThawedEvent(SP_ADDRESS, VERIFIER_ADDRESS, thawAmount)
+    handleProvisionThawed(thawEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "10000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "6000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "4000000000000000000000")
+
+    // Verify tokensThawing on the provision
+    let provisionId = getProvisionIdString(SP_ADDRESS, VERIFIER_ADDRESS)
+    assert.fieldEquals("Provision", provisionId, "tokens", "5000000000000000000000")
+    assert.fieldEquals("Provision", provisionId, "tokensThawing", "1000000000000000000000")
+
+    // 5. Deprovision 1000 GRT (after thawing completes) - now tokensProvisioned decreases
+    let deprovisionEvent = createTokensDeprovisionedEvent(SP_ADDRESS, VERIFIER_ADDRESS, thawAmount)
+    handleTokensDeprovisioned(deprovisionEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "10000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "5000000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "5000000000000000000000")
+
+    // tokensThawing should now be 0
+    assert.fieldEquals("Provision", provisionId, "tokensThawing", "0")
+
+    // 6. Slash 500 GRT - tokensIdle stays 5000 (both staked and provisioned decrease equally)
+    let slashAmount = BigInt.fromString("500000000000000000000") // 500 GRT
+    let slashEvent = createProvisionSlashedEvent(SP_ADDRESS, VERIFIER_ADDRESS, slashAmount)
+    handleProvisionSlashed(slashEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "9500000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "4500000000000000000000")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "5000000000000000000000")
+
+    // Verify GraphNetwork aggregates
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensStaked", "9500000000000000000000")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensProvisioned", "4500000000000000000000")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countProvisions", "1")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
   })
 })

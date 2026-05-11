@@ -2,16 +2,9 @@ import {
   HorizonStakeDeposited,
   HorizonStakeWithdrawn
 } from "../../generated/HorizonStaking/HorizonStaking"
-import {
-  getOrCreateGraphNetwork,
-  updateGraphNetworkOnStakeDeposit,
-  updateGraphNetworkOnStakeWithdraw
-} from "../entities/graphNetwork"
-import {
-  getOrCreateServiceProvider,
-  updateServiceProviderOnStakeDeposit,
-  updateServiceProviderOnStakeWithdraw
-} from "../entities/serviceProvider"
+import { BIGINT_ZERO } from "../common/constants"
+import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
+import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
 
 /**
  * Emitted by:
@@ -29,18 +22,18 @@ export function handleHorizonStakeDeposited(event: HorizonStakeDeposited): void 
     event.block.timestamp
   )
 
-  // Service provider
-  updateServiceProviderOnStakeDeposit(
-    serviceProvider.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  serviceProvider.entity.save()
+  // ServiceProvider
+  serviceProvider.entity.tokensStaked = serviceProvider.entity.tokensStaked.plus(event.params.tokens)
+  assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
+  serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
-  // Graph network
-  updateGraphNetworkOnStakeDeposit(graphNetwork, event.params.tokens, serviceProvider.isNew)
-  graphNetwork.save()
+  // GraphNetwork
+  graphNetwork.tokensStaked = graphNetwork.tokensStaked.plus(event.params.tokens)
+  if (serviceProvider.isNew) {
+    graphNetwork.countServiceProviders += 1
+  }
+  saveGraphNetwork(graphNetwork)
 }
 
 /**
@@ -56,16 +49,18 @@ export function handleHorizonStakeWithdrawn(event: HorizonStakeWithdrawn): void 
     event.block.timestamp
   )
 
-  // Service provider
-  updateServiceProviderOnStakeWithdraw(
-    serviceProvider.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  serviceProvider.entity.save()
+  // ServiceProvider
+  assert(serviceProvider.entity.tokensStaked >= event.params.tokens, "Withdraw exceeds staked tokens.")
+  serviceProvider.entity.tokensStaked = serviceProvider.entity.tokensStaked.minus(event.params.tokens)
+  assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
+  serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
-  // Graph network
-  updateGraphNetworkOnStakeWithdraw(graphNetwork, event.params.tokens)
-  graphNetwork.save()
+  // GraphNetwork
+  assert(graphNetwork.tokensStaked >= event.params.tokens, "Withdraw exceeds total staked.")
+  graphNetwork.tokensStaked = graphNetwork.tokensStaked.minus(event.params.tokens)
+  if(serviceProvider.entity.tokensStaked.equals(BIGINT_ZERO)) {
+    graphNetwork.countServiceProviders -= 1
+  }
+  saveGraphNetwork(graphNetwork)
 }

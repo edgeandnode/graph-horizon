@@ -4,31 +4,12 @@ import {
   ProvisionThawed,
   ProvisionSlashed,
   ProvisionParametersStaged,
-  ProvisionParametersSet
+  ProvisionParametersSet,
+  TokensDeprovisioned
 } from "../../generated/HorizonStaking/HorizonStaking"
-import {
-  getOrCreateGraphNetwork,
-  updateGraphNetworkOnProvisionCreated,
-  updateGraphNetworkOnProvisionIncreased,
-  updateGraphNetworkOnProvisionThawed,
-  updateGraphNetworkOnProvisionSlashed
-} from "../entities/graphNetwork"
-import {
-  getOrCreateServiceProvider,
-  updateServiceProviderOnProvisionCreated,
-  updateServiceProviderOnProvisionIncreased,
-  updateServiceProviderOnProvisionThawed,
-  updateServiceProviderOnProvisionSlashed
-} from "../entities/serviceProvider"
-import {
-  getOrCreateProvision,
-  updateProvisionOnCreated,
-  updateProvisionOnIncreased,
-  updateProvisionOnThawed,
-  updateProvisionOnSlashed,
-  updateProvisionOnParametersStaged,
-  updateProvisionOnParametersSet
-} from "../entities/provision"
+import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
+import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
+import { getOrCreateProvision, saveProvision } from "../entities/provision"
 
 /**
  * Emitted when a service provider creates a new provision to a verifier.
@@ -48,28 +29,25 @@ export function handleProvisionCreated(event: ProvisionCreated): void {
   )
 
   // Provision
-  updateProvisionOnCreated(
-    provision.entity,
-    event.params.tokens,
-    event.params.maxVerifierCut,
-    event.params.thawingPeriod,
-    event.block.number,
-    event.block.timestamp
-  )
-  provision.entity.save()
+  assert(provision.isNew, "Provision already exists.")
+  provision.entity.tokens = event.params.tokens
+  provision.entity.maxVerifierCut = event.params.maxVerifierCut
+  provision.entity.thawingPeriod = event.params.thawingPeriod
+  provision.entity.maxVerifierCutPending = event.params.maxVerifierCut
+  provision.entity.thawingPeriodPending = event.params.thawingPeriod
+  saveProvision(provision.entity, event.block)
 
-  // Service provider
-  updateServiceProviderOnProvisionCreated(
-    serviceProvider.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  serviceProvider.entity.save()
+  // ServiceProvider
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.plus(event.params.tokens)
+  assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
+  serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
-  // Graph network
-  updateGraphNetworkOnProvisionCreated(graphNetwork, event.params.tokens)
-  graphNetwork.save()
+  // GraphNetwork
+  graphNetwork.countProvisions += 1
+  graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.plus(event.params.tokens)
+  saveGraphNetwork(graphNetwork)
 }
 
 /**
@@ -90,32 +68,46 @@ export function handleProvisionIncreased(event: ProvisionIncreased): void {
   )
 
   // Provision
-  updateProvisionOnIncreased(
-    provision.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  provision.entity.save()
+  assert(!provision.isNew, "Provision does not exist.")
+  provision.entity.tokens = provision.entity.tokens.plus(event.params.tokens)
+  saveProvision(provision.entity, event.block)
 
-  // Service provider
-  updateServiceProviderOnProvisionIncreased(
-    serviceProvider.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  serviceProvider.entity.save()
+  // ServiceProvider
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.plus(event.params.tokens)
+  assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
+  serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
-  // Graph network
-  updateGraphNetworkOnProvisionIncreased(graphNetwork, event.params.tokens)
-  graphNetwork.save()
+  // GraphNetwork
+  graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.plus(event.params.tokens)
+  saveGraphNetwork(graphNetwork)
 }
 
 /**
  * Emitted when tokens begin thawing from a provision.
+ * Note: Thawing tokens are still considered "provisioned" .
  */
 export function handleProvisionThawed(event: ProvisionThawed): void {
+  let provision = getOrCreateProvision(
+    event.params.serviceProvider,
+    event.params.verifier,
+    event.block.number,
+    event.block.timestamp
+  )
+
+  // Provision
+  assert(!provision.isNew, "Provision does not exist.")
+  assert(provision.entity.tokens >= event.params.tokens, "Thaw exceeds provision tokens.")
+  provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
+  provision.entity.tokensThawing = provision.entity.tokensThawing.plus(event.params.tokens)
+  saveProvision(provision.entity, event.block)
+}
+
+/**
+ * Emitted when thawed tokens are removed from a provision (after thawing period completes).
+ */
+export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
   let graphNetwork = getOrCreateGraphNetwork()
   let serviceProvider = getOrCreateServiceProvider(
     event.params.serviceProvider,
@@ -130,26 +122,23 @@ export function handleProvisionThawed(event: ProvisionThawed): void {
   )
 
   // Provision
-  updateProvisionOnThawed(
-    provision.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  provision.entity.save()
+  assert(!provision.isNew, "Provision does not exist.")
+  assert(provision.entity.tokensThawing >= event.params.tokens, "Deprovision exceeds thawing tokens.")
+  provision.entity.tokensThawing = provision.entity.tokensThawing.minus(event.params.tokens)
+  saveProvision(provision.entity, event.block)
 
-  // Service provider
-  updateServiceProviderOnProvisionThawed(
-    serviceProvider.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  serviceProvider.entity.save()
+  // ServiceProvider
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  assert(serviceProvider.entity.tokensProvisioned >= event.params.tokens, "Deprovision exceeds service provider tokens provisioned.")
+  serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.minus(event.params.tokens)
+  assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
+  serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
-  // Graph network
-  updateGraphNetworkOnProvisionThawed(graphNetwork, event.params.tokens)
-  graphNetwork.save()
+  // GraphNetwork
+  assert(graphNetwork.tokensProvisioned >= event.params.tokens, "Deprovision exceeds network tokens provisioned.")
+  graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.minus(event.params.tokens)
+  saveGraphNetwork(graphNetwork)
 }
 
 /**
@@ -170,26 +159,27 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   )
 
   // Provision
-  updateProvisionOnSlashed(
-    provision.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  provision.entity.save()
+  assert(!provision.isNew, "Provision does not exist.")
+  assert(provision.entity.tokens >= event.params.tokens, "Slash exceeds provision tokens")
+  provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
+  saveProvision(provision.entity, event.block)
 
-  // Service provider
-  updateServiceProviderOnProvisionSlashed(
-    serviceProvider.entity,
-    event.params.tokens,
-    event.block.number,
-    event.block.timestamp
-  )
-  serviceProvider.entity.save()
+  // ServiceProvider
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  assert(serviceProvider.entity.tokensStaked >= event.params.tokens, "Slash exceeds service provider tokens staked.")
+  serviceProvider.entity.tokensStaked = serviceProvider.entity.tokensStaked.minus(event.params.tokens)
+  assert(serviceProvider.entity.tokensProvisioned >= event.params.tokens, "Slash exceeds service provider tokens provisioned.")
+  serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.minus(event.params.tokens)
+  assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
+  serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
-  // Graph network
-  updateGraphNetworkOnProvisionSlashed(graphNetwork, event.params.tokens)
-  graphNetwork.save()
+  // GraphNetwork
+  assert(graphNetwork.tokensStaked >= event.params.tokens, "Slash exceeds network tokens staked.")
+  assert(graphNetwork.tokensProvisioned >= event.params.tokens, "Slash exceeds network tokens provisioned.")
+  graphNetwork.tokensStaked = graphNetwork.tokensStaked.minus(event.params.tokens)
+  graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.minus(event.params.tokens)
+  saveGraphNetwork(graphNetwork)
 }
 
 /**
@@ -203,14 +193,12 @@ export function handleProvisionParametersStaged(event: ProvisionParametersStaged
     event.block.timestamp
   )
 
-  updateProvisionOnParametersStaged(
-    provision.entity,
-    event.params.maxVerifierCut,
-    event.params.thawingPeriod,
-    event.block.number,
-    event.block.timestamp
-  )
-  provision.entity.save()
+  // Provision
+  assert(!provision.isNew, "Provision does not exist.")
+  provision.entity.maxVerifierCutPending = event.params.maxVerifierCut
+  provision.entity.thawingPeriodPending = event.params.thawingPeriod
+  provision.entity.lastParametersStagedAt = event.block.timestamp
+  saveProvision(provision.entity, event.block)
 }
 
 /**
@@ -224,12 +212,11 @@ export function handleProvisionParametersSet(event: ProvisionParametersSet): voi
     event.block.timestamp
   )
 
-  updateProvisionOnParametersSet(
-    provision.entity,
-    event.params.maxVerifierCut,
-    event.params.thawingPeriod,
-    event.block.number,
-    event.block.timestamp
-  )
-  provision.entity.save()
+  // Provision
+  assert(!provision.isNew, "Provision does not exist.")
+  provision.entity.maxVerifierCut = event.params.maxVerifierCut
+  provision.entity.thawingPeriod = event.params.thawingPeriod
+  provision.entity.maxVerifierCutPending = event.params.maxVerifierCut
+  provision.entity.thawingPeriodPending = event.params.thawingPeriod
+  saveProvision(provision.entity, event.block)
 }

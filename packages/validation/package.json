@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "validate:stake": "tsx src/validate-stake.ts"
+    "validate:stake": "tsx src/validation/stake.ts",
+    "validate:provisions": "tsx src/validation/provisions.ts"
   },
   "devDependencies": {
     "@types/node": "22.15.18",

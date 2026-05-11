@@ -7,5 +7,6 @@ export {
   handleProvisionThawed,
   handleProvisionSlashed,
   handleProvisionParametersStaged,
-  handleProvisionParametersSet
+  handleProvisionParametersSet,
+  handleTokensDeprovisioned
 } from "./handlers/provision"

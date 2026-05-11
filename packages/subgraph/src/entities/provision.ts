@@ -1,4 +1,4 @@
-import { BigInt, Bytes } from "@graphprotocol/graph-ts"
+import { BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { Provision } from "../../generated/schema"
 import { BIGINT_ZERO } from "../common/constants"
 
@@ -46,80 +46,8 @@ export function getOrCreateProvision(
   return new ProvisionResult(entity, isNew)
 }
 
-export function updateProvisionOnCreated(
-  provision: Provision,
-  tokens: BigInt,
-  maxVerifierCut: BigInt,
-  thawingPeriod: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  provision.tokens = tokens
-  provision.maxVerifierCut = maxVerifierCut
-  provision.thawingPeriod = thawingPeriod
-  provision.updatedAtBlock = blockNumber
-  provision.updatedAt = timestamp
-}
-
-export function updateProvisionOnIncreased(
-  provision: Provision,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  provision.tokens = provision.tokens.plus(tokens)
-  provision.updatedAtBlock = blockNumber
-  provision.updatedAt = timestamp
-}
-
-export function updateProvisionOnThawed(
-  provision: Provision,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  provision.tokens = provision.tokens.minus(tokens)
-  provision.tokensThawing = provision.tokensThawing.plus(tokens)
-  provision.updatedAtBlock = blockNumber
-  provision.updatedAt = timestamp
-}
-
-export function updateProvisionOnSlashed(
-  provision: Provision,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  provision.tokens = provision.tokens.minus(tokens)
-  provision.updatedAtBlock = blockNumber
-  provision.updatedAt = timestamp
-}
-
-export function updateProvisionOnParametersStaged(
-  provision: Provision,
-  maxVerifierCut: BigInt,
-  thawingPeriod: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  provision.maxVerifierCutPending = maxVerifierCut
-  provision.thawingPeriodPending = thawingPeriod
-  provision.lastParametersStagedAt = timestamp
-  provision.updatedAtBlock = blockNumber
-  provision.updatedAt = timestamp
-}
-
-export function updateProvisionOnParametersSet(
-  provision: Provision,
-  maxVerifierCut: BigInt,
-  thawingPeriod: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  provision.maxVerifierCut = maxVerifierCut
-  provision.thawingPeriod = thawingPeriod
-  provision.maxVerifierCutPending = BIGINT_ZERO
-  provision.thawingPeriodPending = BIGINT_ZERO
-  provision.updatedAtBlock = blockNumber
-  provision.updatedAt = timestamp
+export function saveProvision(provision: Provision, block: ethereum.Block): void {
+  provision.updatedAtBlock = block.number
+  provision.updatedAt = block.timestamp
+  provision.save()
 }

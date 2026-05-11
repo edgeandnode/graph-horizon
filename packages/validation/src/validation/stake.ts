@@ -4,10 +4,8 @@
  * Usage: NETWORK=arbitrum-one pnpm validate:stake <subgraph-url>
  */
 
-import { getConfig } from "./config"
-import { getStake } from "./onchain"
-
-const config = getConfig()
+import { getStake } from "../onchain"
+import { querySubgraph, formatGRT, getSubgraphUrl, printHeader, delay } from "./common"
 
 interface ServiceProvider {
   id: string
@@ -20,40 +18,9 @@ interface GraphNetwork {
   countServiceProviders: number
 }
 
-async function querySubgraph<T>(url: string, query: string): Promise<T> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query }),
-  })
-  const json = await response.json()
-  if (json.errors) {
-    throw new Error(`Subgraph error: ${JSON.stringify(json.errors)}`)
-  }
-  return json.data
-}
-
-// Format token amount with 18 decimals as GRT
-function formatGRT(wei: bigint): string {
-  const decimals = 18n
-  const divisor = 10n ** decimals
-  const whole = wei / divisor
-  const fraction = wei % divisor
-  const fractionStr = fraction.toString().padStart(18, "0").slice(0, 4)
-  return `${whole.toLocaleString()}.${fractionStr} GRT`
-}
-
 async function main() {
-  const subgraphUrl = process.argv[2]
-  if (!subgraphUrl) {
-    console.error("Usage: npx tsx scripts/validate-stake.ts <subgraph-url>")
-    process.exit(1)
-  }
-
-  console.log("Subgraph URL:", subgraphUrl)
-  console.log("RPC URL:", config.rpcUrl)
-  console.log("Staking contract:", config.stakingAddress)
-  console.log("")
+  const subgraphUrl = getSubgraphUrl()
+  printHeader(subgraphUrl)
 
   // Fetch GraphNetwork
   const networkData = await querySubgraph<{ graphNetwork: GraphNetwork }>(
@@ -118,8 +85,7 @@ async function main() {
       matches++
     }
 
-    // Rate limiting - small delay between RPC calls
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await delay()
   }
 
   // Summary

@@ -43,4 +43,6 @@ dataSources:
           handler: handleProvisionParametersStaged
         - event: ProvisionParametersSet(indexed address,indexed address,uint32,uint64)
           handler: handleProvisionParametersSet
+        - event: TokensDeprovisioned(indexed address,indexed address,uint256)
+          handler: handleTokensDeprovisioned
       file: ./src/mapping.ts

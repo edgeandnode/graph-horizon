@@ -1,4 +1,4 @@
-import { BigInt, Bytes } from "@graphprotocol/graph-ts"
+import { BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { ServiceProvider } from "../../generated/schema"
 import { BIGINT_ZERO } from "../common/constants"
 
@@ -34,77 +34,8 @@ export function getOrCreateServiceProvider(
   return new ServiceProviderResult(entity, isNew)
 }
 
-export function updateServiceProviderOnStakeDeposit(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  serviceProvider.tokensStaked = serviceProvider.tokensStaked.plus(tokens)
-  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
-}
-
-export function updateServiceProviderOnStakeWithdraw(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  assert(serviceProvider.tokensStaked >= tokens, "Withdraw exceeds staked tokens")
-
-  serviceProvider.tokensStaked = serviceProvider.tokensStaked.minus(tokens)
-  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
-}
-
-export function updateServiceProviderOnProvisionCreated(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.plus(tokens)
-  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
-}
-
-export function updateServiceProviderOnProvisionIncreased(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.plus(tokens)
-  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
-}
-
-export function updateServiceProviderOnProvisionThawed(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.minus(tokens)
-  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
-}
-
-export function updateServiceProviderOnProvisionSlashed(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  serviceProvider.tokensStaked = serviceProvider.tokensStaked.minus(tokens)
-  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.minus(tokens)
-  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
+export function saveServiceProvider(sp: ServiceProvider, block: ethereum.Block): void {
+  sp.updatedAtBlock = block.number
+  sp.updatedAt = block.timestamp
+  sp.save()
 }
