@@ -227,4 +227,4 @@ Will detail these after Stage 2 is validated. High-level scope:
 
 **Stage 7 - Payments & Escrow:** GraphPayments and PaymentsEscrow events. New entities only (no migration).
 
-**Stage 8 - Slashing & Fees:** ProvisionSlashed, DelegationSlashed, DelegationFeeCutSet. Complete remaining fields.
+**Stage 8 - Slashing & Fees:** StakeSlashed (legacy), ProvisionSlashed, DelegationSlashed, DelegationFeeCutSet. Complete remaining fields.
