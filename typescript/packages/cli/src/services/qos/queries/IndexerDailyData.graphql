@@ -1,9 +1,0 @@
-query IndexerDailyData($dayStart_gt: BigInt!) {
-  indexerDailyDataPoints(first: 1000, where: { dayStart_gt: $dayStart_gt }) {
-    indexer {
-      id
-    }
-    dayStart
-    query_count
-  }
-}

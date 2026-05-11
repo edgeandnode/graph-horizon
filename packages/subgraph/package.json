@@ -1,5 +1,5 @@
 {
-  "name": "graph-horizon-network-subgraph",
+  "name": "@graphprotocol/graph-horizon-subgraph",
   "version": "0.1.0",
   "description": "Network subgraph for indexing Graph Horizon protocol",
   "scripts": {

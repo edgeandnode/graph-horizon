@@ -9,7 +9,13 @@
       "WebSearch",
       "Bash(git clone:*)",
       "WebFetch(domain:thegraph.academy)",
-      "WebFetch(domain:thegraph.com)"
+      "WebFetch(domain:thegraph.com)",
+      "Bash(pnpm codegen:*)",
+      "Bash(pnpm build:*)",
+      "Bash(git checkout:*)",
+      "Bash(git stash:*)",
+      "Bash(chmod:*)",
+      "Bash(tree:*)"
     ]
   }
 }
