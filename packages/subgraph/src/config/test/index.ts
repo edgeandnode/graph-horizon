@@ -1,6 +1,6 @@
 import { Address } from "@graphprotocol/graph-ts"
 import { NetworkConfig } from "../types"
-import { SERVICE_PROVIDER_ADDRESSES } from "./seed"
+import { SERVICE_PROVIDER_ADDRESSES } from "./indexer-seed"
 
 export const config = new NetworkConfig(
   "test",

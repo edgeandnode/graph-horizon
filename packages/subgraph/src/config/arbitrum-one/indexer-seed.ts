@@ -1,6 +1,9 @@
 // AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
-// Regenerate with: GRAPH_API_KEY=your_key ./scripts/fetch-indexers.sh > src/config/arbitrum-one/seed.ts
-// Generated at block: 408825706
+// Regenerate with: cd packages/tools && NETWORK=arbitrum-one pnpm seed:indexers
+// Generated: 2026-05-11T19:57:41.280Z
+// Network: arbitrum-one
+// Block: 408825706
+// Count: 98
 
 export const SERVICE_PROVIDER_ADDRESSES: string[] = [
   "0x0058223c6617cca7ce76fc929ec9724cd43d4542",

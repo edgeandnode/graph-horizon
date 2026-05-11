@@ -5,7 +5,7 @@
  */
 
 import { getStake } from "../onchain"
-import { querySubgraph, formatGRT, getSubgraphUrl, printHeader, delay } from "./common"
+import { querySubgraph, formatGRT, getSubgraphUrlFromArgs, printHeader, delay } from "../common"
 
 interface ServiceProvider {
   id: string
@@ -19,7 +19,7 @@ interface GraphNetwork {
 }
 
 async function main() {
-  const subgraphUrl = getSubgraphUrl()
+  const subgraphUrl = getSubgraphUrlFromArgs()
   printHeader(subgraphUrl)
 
   // Fetch GraphNetwork

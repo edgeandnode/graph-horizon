@@ -1,9 +1,11 @@
 {
-  "name": "@graphprotocol/graph-horizon-validation",
+  "name": "@graphprotocol/graph-horizon-tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
+    "seed:indexers": "tsx src/seed/indexers.ts",
+    "seed:delegations": "tsx src/seed/delegations.ts",
     "validate:stake": "tsx src/validation/stake.ts",
     "validate:provisions": "tsx src/validation/provisions.ts"
   },

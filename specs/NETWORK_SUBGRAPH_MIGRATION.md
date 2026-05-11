@@ -19,11 +19,12 @@ These entities are new to Horizon - all state is created via Horizon events:
 | `Provision` | Provisions are a new Horizon concept |
 | `ProvisionFeeCut` | New concept |
 | `ProvisionThawRequest` | New thaw request system |
-| `DelegationPool` | Per-provision pools are new |
 | `DelegationThawRequest` | New thaw request system |
 | `Payer` | PaymentsEscrow is new |
 | `Collector` | New concept |
 | `EscrowAccount` | New escrow system |
+
+**Note:** `DelegationPool` entities for **Subgraph Service** DO require migration (see Delegation section below). DelegationPools for other data services are new and don't require migration.
 
 ### State That REQUIRES Migration
 
@@ -88,6 +89,114 @@ Legacy delegations were auto-assigned to **Subgraph Service** specifically.
 | `GraphNetwork` | `countDelegators` | Total delegators |
 
 **Important:** `Delegation`, `DelegationPool`, and `DataService` delegation fields only have pre-existing state for **Subgraph Service**. Other data services start fresh.
+
+### Delegation Analysis
+
+Analysis of the legacy graph-network-subgraph reveals:
+
+| Metric | Count |
+|--------|-------|
+| Total delegators | ~310,000 |
+| Total DelegatedStake records | ~323,000 |
+| Indexers with delegations | ~181 |
+
+**Distribution by delegation size:**
+
+| Range | Count | % |
+|-------|-------|---|
+| < 1 GRT | ~2,400 | 0.8% |
+| 1-10 GRT | ~4,200 | 1.3% |
+| 10-100 GRT | ~293,000 | 90.8% |
+| 100-1k GRT | ~13,800 | 4.3% |
+| 1k-10k GRT | ~4,000 | 1.2% |
+| > 10k GRT | ~5,200 | 1.6% |
+
+**Key finding:** ~91% of delegations are in the 10-100 GRT range, likely from the Coinbase Earn program. These are effectively dust delegators who are unlikely to ever interact with Horizon.
+
+### Contract Calls for Delegation
+
+The `HorizonStaking` contract provides:
+
+| Function | Signature | Returns |
+|----------|-----------|---------|
+| `getDelegationPool` | `getDelegationPool(address sp, address verifier)` | `(tokens, shares, tokensThawing, sharesThawing, nonce)` |
+| `getDelegation` | `getDelegation(address sp, address verifier, address delegator)` | `(shares, tokensLocked, tokensLockedUntil)` |
+
+The contract also supports batched calls via built-in `multicall(bytes[] calldata data)`.
+
+### Migration Approach: Hybrid Seeding
+
+Given the large number of delegators (~310k) but concentration of value in larger delegations (~7%), we use a **hybrid approach**:
+
+#### Tier 1: Proactive Seeding (at genesis block)
+
+Seed entities for delegations **>= 100 GRT** (~23,000 delegations):
+
+1. **DelegationPool** entities (~181) - one per service provider for Subgraph Service
+2. **Delegation** entities (~23,000) - for delegators with >= 100 GRT
+3. **Delegator** entities (~23,000) - corresponding delegator records
+
+**Contract calls:**
+- `getDelegationPool()` × 181 = 181 calls
+- `getDelegation()` × 23,000 = 23,000 calls (batched via multicall, ~47 batches of 500)
+
+**Data to hardcode:**
+- ~181 indexer addresses (~7.6 KB)
+- ~23,000 (delegator, indexer) pairs (~1.9 MB)
+- Total: ~2 MB (well under WASM limits)
+
+#### Tier 2: Lazy Initialization (on first interaction)
+
+For delegations **< 100 GRT** (~300,000 delegations):
+
+- `Delegator` and `Delegation` entities created when delegator first interacts with Horizon
+- Contract call to `getDelegation()` fetches current state at interaction time
+- These are mostly Coinbase Earn dust delegators unlikely to ever interact
+
+**Trade-offs:**
+- `countDelegators` on `DelegationPool`/`ServiceProvider`/`GraphNetwork` reflects only seeded delegators (~23k vs ~310k)
+- Dust delegators (~92%) won't have entities until they interact
+- Service providers get accurate `tokensDelegated` totals immediately (what matters for operations)
+
+### Implementation
+
+1. **Export delegation data** from legacy subgraph:
+   ```bash
+   cd packages/tools
+   pnpm seed:delegations 100  # threshold in GRT
+   ```
+   This generates `packages/subgraph/src/config/arbitrum-one/delegation-seed.ts` with indexer addresses and (delegator, indexer) pairs.
+
+2. **Genesis block handler**:
+   ```typescript
+   function handleBlock(block: ethereum.Block): void {
+     // Seed DelegationPools
+     for (let i = 0; i < INDEXER_ADDRESSES.length; i++) {
+       seedDelegationPool(INDEXER_ADDRESSES[i], SUBGRAPH_SERVICE)
+     }
+
+     // Seed Delegations (batched multicall)
+     for (let i = 0; i < DELEGATIONS.length; i++) {
+       seedDelegation(DELEGATIONS[i][0], DELEGATIONS[i][1], SUBGRAPH_SERVICE)
+     }
+   }
+   ```
+
+3. **Lazy initialization** in event handlers:
+   ```typescript
+   function getOrCreateDelegation(delegator: Address, sp: Address, verifier: Address): Delegation {
+     let id = delegationId(delegator, sp, verifier)
+     let delegation = Delegation.load(id)
+     if (delegation == null) {
+       // Fetch current state from contract
+       let onChain = contract.getDelegation(sp, verifier, delegator)
+       delegation = new Delegation(id)
+       delegation.shares = onChain.shares
+       // ... populate fields
+     }
+     return delegation
+   }
+   ```
 
 ## 3. Operators
 
@@ -271,15 +380,27 @@ If capturing providers who never interact with Horizon is important, a hardcoded
 
 ## Open Questions
 
-1. What is the exact Subgraph Service address?
+1. ~~What is the exact Subgraph Service address?~~ **Answered:** `0xb2Bb92d0DE618878E438b55D5846cfecD9301105`
 2. What is the Horizon deployment block number?
 3. ~~Is capturing inactive providers (who never interact with Horizon) a requirement?~~ **Decided:** Yes, proactive seeding for all ~180 service providers.
-4. ~~If proactive seeding is needed, what's the best source for the address list?~~ **Decided:** Query old subgraph or protocol team records.
+4. ~~If proactive seeding is needed, what's the best source for the address list?~~ **Decided:** Query old subgraph via validation scripts.
+5. ~~How to handle ~310k delegators?~~ **Decided:** Hybrid approach - seed >= 100 GRT delegations (~23k), lazy-load the rest.
+
+## Decided Approaches
+
+| State | Approach | Entities | Contract Calls |
+|-------|----------|----------|----------------|
+| **Stake** | Proactive seeding | ~181 ServiceProviders | ~181 `getStake()` |
+| **Delegation (>= 100 GRT)** | Proactive seeding | ~181 DelegationPools, ~23k Delegations | ~47 multicall batches |
+| **Delegation (< 100 GRT)** | Lazy initialization | ~300k (on demand) | On first interaction |
+| **Operators** | TBD | TBD | TBD |
 
 ## Next Steps
 
-- [ ] Clarify open questions with protocol team
-- [ ] Decide on migration approach based on requirements
-- [ ] If proactive seeding: obtain and validate address list
-- [ ] Document specific implementation for chosen approach
+- [x] Analyze delegation distribution (Coinbase Earn impact)
+- [x] Decide on hybrid delegation approach
+- [x] Create delegation export script
+- [ ] Clarify Horizon deployment block number
+- [ ] Implement delegation seeding in subgraph
+- [ ] Investigate operator migration requirements
 - [ ] Test migration with known pre-existing participants

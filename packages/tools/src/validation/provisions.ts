@@ -6,7 +6,7 @@
  */
 
 import { getProvision, getServiceProvider } from "../onchain"
-import { querySubgraph, formatGRT, getSubgraphUrl, printHeader, delay } from "./common"
+import { querySubgraph, formatGRT, getSubgraphUrlFromArgs, printHeader, delay } from "../common"
 
 interface SubgraphProvision {
   id: string
@@ -51,7 +51,7 @@ function compareField(
 }
 
 async function main() {
-  const subgraphUrl = getSubgraphUrl()
+  const subgraphUrl = getSubgraphUrlFromArgs()
   printHeader(subgraphUrl)
 
   // Fetch GraphNetwork
