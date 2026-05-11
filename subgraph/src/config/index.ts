@@ -1,1 +1,1 @@
-export { config } from "./arbitrumOne"
+export { config } from "./arbitrum-one"

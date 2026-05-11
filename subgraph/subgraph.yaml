@@ -17,10 +17,17 @@ dataSources:
       language: wasm/assemblyscript
       entities:
         - GraphNetwork
+        - ServiceProvider
       abis:
         - name: HorizonStaking
           file: ./abis/HorizonStaking.json
+      blockHandlers:
+        - handler: handleHorizonGenesisBlock
+          filter:
+            kind: once
       eventHandlers:
         - event: HorizonStakeDeposited(indexed address,uint256)
           handler: handleHorizonStakeDeposited
-      file: ./src/handlers/staking.ts
+        - event: HorizonStakeWithdrawn(indexed address,uint256)
+          handler: handleHorizonStakeWithdrawn
+      file: ./src/mapping.ts

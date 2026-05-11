@@ -1,4 +1,35 @@
 type GraphNetwork @entity(immutable: false) {
   "Singleton entity, always '1'"
   id: Bytes!
+
+  # Counts
+  "Active service providers"
+  countServiceProviders: Int!
+
+  # Stake aggregates
+  "Total tokens staked by service providers"
+  tokensStaked: BigInt!
+}
+
+type ServiceProvider @entity(immutable: false) {
+  "Service provider address"
+  id: Bytes!
+
+  # Stake
+  "Tokens staked by the service provider"
+  tokensStaked: BigInt!
+  "Tokens provisioned to data services"
+  tokensProvisioned: BigInt!
+  "Tokens that are not locked in provisions"
+  tokensIdle: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
 }
