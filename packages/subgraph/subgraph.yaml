@@ -18,6 +18,7 @@ dataSources:
       entities:
         - GraphNetwork
         - ServiceProvider
+        - Provision
       abis:
         - name: HorizonStaking
           file: ./abis/HorizonStaking.json
@@ -30,4 +31,16 @@ dataSources:
           handler: handleHorizonStakeDeposited
         - event: HorizonStakeWithdrawn(indexed address,uint256)
           handler: handleHorizonStakeWithdrawn
+        - event: ProvisionCreated(indexed address,indexed address,uint256,uint32,uint64)
+          handler: handleProvisionCreated
+        - event: ProvisionIncreased(indexed address,indexed address,uint256)
+          handler: handleProvisionIncreased
+        - event: ProvisionThawed(indexed address,indexed address,uint256)
+          handler: handleProvisionThawed
+        - event: ProvisionSlashed(indexed address,indexed address,uint256)
+          handler: handleProvisionSlashed
+        - event: ProvisionParametersStaged(indexed address,indexed address,uint32,uint64)
+          handler: handleProvisionParametersStaged
+        - event: ProvisionParametersSet(indexed address,indexed address,uint32,uint64)
+          handler: handleProvisionParametersSet
       file: ./src/mapping.ts

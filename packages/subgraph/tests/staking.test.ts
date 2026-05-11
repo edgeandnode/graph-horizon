@@ -52,7 +52,8 @@ describe("HorizonStakeDeposited", () => {
     assert.entityCount("ServiceProvider", 1)
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", tokens.toString())
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "0")
-    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "0")
+    // tokensIdle = tokensStaked - tokensProvisioned = 1000 GRT
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", tokens.toString())
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "createdAtBlock", "100")
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "createdAt", "1000")
 

@@ -41,8 +41,7 @@ export function updateServiceProviderOnStakeDeposit(
   timestamp: BigInt
 ): void {
   serviceProvider.tokensStaked = serviceProvider.tokensStaked.plus(tokens)
-  // TODO: Update tokensIdle when provision handlers are implemented
-  // serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
+  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
   serviceProvider.updatedAtBlock = blockNumber
   serviceProvider.updatedAt = timestamp
 }
@@ -56,8 +55,56 @@ export function updateServiceProviderOnStakeWithdraw(
   assert(serviceProvider.tokensStaked >= tokens, "Withdraw exceeds staked tokens")
 
   serviceProvider.tokensStaked = serviceProvider.tokensStaked.minus(tokens)
-  // TODO: Update tokensIdle when provision handlers are implemented
-  // serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
+  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
+  serviceProvider.updatedAtBlock = blockNumber
+  serviceProvider.updatedAt = timestamp
+}
+
+export function updateServiceProviderOnProvisionCreated(
+  serviceProvider: ServiceProvider,
+  tokens: BigInt,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.plus(tokens)
+  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
+  serviceProvider.updatedAtBlock = blockNumber
+  serviceProvider.updatedAt = timestamp
+}
+
+export function updateServiceProviderOnProvisionIncreased(
+  serviceProvider: ServiceProvider,
+  tokens: BigInt,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.plus(tokens)
+  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
+  serviceProvider.updatedAtBlock = blockNumber
+  serviceProvider.updatedAt = timestamp
+}
+
+export function updateServiceProviderOnProvisionThawed(
+  serviceProvider: ServiceProvider,
+  tokens: BigInt,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.minus(tokens)
+  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
+  serviceProvider.updatedAtBlock = blockNumber
+  serviceProvider.updatedAt = timestamp
+}
+
+export function updateServiceProviderOnProvisionSlashed(
+  serviceProvider: ServiceProvider,
+  tokens: BigInt,
+  blockNumber: BigInt,
+  timestamp: BigInt
+): void {
+  serviceProvider.tokensStaked = serviceProvider.tokensStaked.minus(tokens)
+  serviceProvider.tokensProvisioned = serviceProvider.tokensProvisioned.minus(tokens)
+  serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
   serviceProvider.updatedAtBlock = blockNumber
   serviceProvider.updatedAt = timestamp
 }

@@ -5,10 +5,14 @@ type GraphNetwork @entity(immutable: false) {
   # Counts
   "Active service providers"
   countServiceProviders: Int!
+  "Active provisions"
+  countProvisions: Int!
 
   # Stake aggregates
   "Total tokens staked by service providers"
   tokensStaked: BigInt!
+  "Total tokens provisioned to data services"
+  tokensProvisioned: BigInt!
 }
 
 type ServiceProvider @entity(immutable: false) {
@@ -22,6 +26,51 @@ type ServiceProvider @entity(immutable: false) {
   tokensProvisioned: BigInt!
   "Tokens that are not locked in provisions"
   tokensIdle: BigInt!
+
+  # Provisions
+  "Provisions created by this service provider"
+  provisions: [Provision!]! @derivedFrom(field: "serviceProvider")
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type Provision @entity(immutable: false) {
+  "Composite ID: serviceProvider-verifier"
+  id: Bytes!
+
+  # Relationships
+  "Service provider that created this provision"
+  serviceProvider: ServiceProvider!
+  "Verifier address (data service)"
+  verifier: Bytes!
+
+  # Tokens
+  "Tokens currently provisioned"
+  tokens: BigInt!
+  "Tokens currently thawing"
+  tokensThawing: BigInt!
+
+  # Parameters
+  "Maximum cut the verifier can take (PPM)"
+  maxVerifierCut: BigInt!
+  "Thawing period in seconds"
+  thawingPeriod: BigInt!
+
+  # Staged parameters (pending acceptance)
+  "Staged max verifier cut"
+  maxVerifierCutPending: BigInt!
+  "Staged thawing period"
+  thawingPeriodPending: BigInt!
+  "Timestamp when parameters were last staged"
+  lastParametersStagedAt: BigInt!
 
   # Metadata
   "Block number when entity was created"
