@@ -1,5 +1,0 @@
-query GraphNetwork {
-  graphNetworks {
-    maxThawingPeriod
-  }
-}

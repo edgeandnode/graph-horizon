@@ -14,41 +14,26 @@ concurrency:
 permissions: {}
 
 jobs:
-  build:
-    name: Build
+  subgraph:
+    name: Subgraph
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
         uses: ./.github/actions/setup
+      - name: Codegen
+        run: pnpm --filter @graphprotocol/graph-horizon-subgraph codegen
+      - name: Build
+        run: pnpm --filter @graphprotocol/graph-horizon-subgraph build
 
-  types:
-    name: Types
+  validation:
+    name: Validation
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
         uses: ./.github/actions/setup
-      - run: pnpm check
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        uses: ./.github/actions/setup
-      - run: pnpm lint
-
-  test:
-    name: Test 
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install dependencies
-        uses: ./.github/actions/setup
-      - run: pnpm test
+      - name: Type check
+        run: pnpm --filter @graphprotocol/graph-horizon-validation exec tsc --noEmit

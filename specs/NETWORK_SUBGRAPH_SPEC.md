@@ -831,6 +831,7 @@ This section documents when each entity is created during indexing.
 | `HorizonStakeDeposited` | Create/update `ServiceProvider`, update `GraphNetwork.tokensStaked` |
 | `HorizonStakeLocked` | Update `ServiceProvider` |
 | `HorizonStakeWithdrawn` | Update `ServiceProvider.tokensStaked`, `GraphNetwork.tokensStaked` |
+| `StakeSlashed` | (Legacy transition) Update `ServiceProvider.tokensStaked`, `GraphNetwork.tokensStaked`, slashing aggregates |
 | `ProvisionCreated` | Create `Provision`, `DelegationPool`, update `ServiceProvider`, `DataService`, `GraphNetwork` |
 | `ProvisionIncreased` | Update `Provision`, `ServiceProvider`, `DataService`, `GraphNetwork` |
 | `ProvisionThawed` | Update `Provision` thawing fields |
