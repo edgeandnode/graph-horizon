@@ -1,3 +1,5 @@
+import "dotenv/config"
+
 export interface NetworkConfig {
   name: string
   rpcUrl: string

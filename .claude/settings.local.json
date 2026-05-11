@@ -20,7 +20,8 @@
       "Bash(pnpm --filter @graphprotocol/graph-horizon-subgraph codegen:*)",
       "Bash(pnpm test:*)",
       "Bash(pnpm --filter @graphprotocol/graph-horizon-subgraph test)",
-      "Bash(pnpm --filter @graphprotocol/graph-horizon-validation exec tsc:*)"
+      "Bash(pnpm --filter @graphprotocol/graph-horizon-validation exec tsc:*)",
+      "Bash(pnpm add:*)"
     ]
   }
 }
