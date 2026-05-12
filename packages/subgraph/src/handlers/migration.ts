@@ -149,26 +149,25 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
       let indexerBytes = Bytes.fromHexString(indexerAddress.toHexString()) as Bytes
       let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
 
-      // Create delegation pool (getOrCreate will fetch from contract, but we have data already)
+      // Create delegation pool
       let pool = getOrCreateDelegationPool(indexerBytes, verifierBytes, block.number, block.timestamp)
       assert(pool.isNew, "Delegation pool already exists.")
-      // Override with our batched data (more efficient than individual contract calls)
       pool.entity.tokens = poolData[0]
       pool.entity.shares = poolData[1]
       pool.entity.tokensThawing = poolData[2]
-      pool.entity.sharesThawing = poolData[3]
       saveDelegationPool(pool.entity, block)
 
+      // Update service provider tokensDelegated - Note that this service provider might not exist
+      let serviceProvider = getOrCreateServiceProvider(indexerBytes, block.number, block.timestamp)
+      serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(poolTokens)
+      saveServiceProvider(serviceProvider.entity, block)
+
       // Update graph network
+      if (serviceProvider.isNew) {
+        graphNetwork.countServiceProviders += 1
+      }
       graphNetwork.countDelegationPools += 1
       graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.plus(poolTokens)
-
-      // Update service provider tokensDelegated
-      let sp = getOrCreateServiceProvider(indexerBytes, block.number, block.timestamp)
-      if (!sp.isNew) {
-        sp.entity.tokensDelegated = sp.entity.tokensDelegated.plus(poolTokens)
-        saveServiceProvider(sp.entity, block)
-      }
     }
   }
 
