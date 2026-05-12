@@ -7,12 +7,18 @@ type GraphNetwork @entity(immutable: false) {
   countServiceProviders: Int!
   "Active provisions"
   countProvisions: Int!
+  "Active delegation pools"
+  countDelegationPools: Int!
+  "Active delegators"
+  countDelegators: Int!
 
   # Stake aggregates
   "Total tokens staked by service providers"
   tokensStaked: BigInt!
   "Total tokens provisioned to data services"
   tokensProvisioned: BigInt!
+  "Total tokens delegated to service providers"
+  tokensDelegated: BigInt!
 }
 
 type ServiceProvider @entity(immutable: false) {
@@ -26,10 +32,113 @@ type ServiceProvider @entity(immutable: false) {
   tokensProvisioned: BigInt!
   "Tokens that are not locked in provisions"
   tokensIdle: BigInt!
+  "Tokens delegated to this service provider"
+  tokensDelegated: BigInt!
+
+  # Counts
+  "Number of delegators to this service provider"
+  countDelegators: Int!
 
   # Provisions
   "Provisions created by this service provider"
   provisions: [Provision!]! @derivedFrom(field: "serviceProvider")
+
+  # Delegation pools
+  "Delegation pools for this service provider"
+  delegationPools: [DelegationPool!]! @derivedFrom(field: "serviceProvider")
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type DelegationPool @entity(immutable: false) {
+  "Composite ID: serviceProvider-verifier"
+  id: Bytes!
+
+  # Relationships
+  "Service provider that owns this pool"
+  serviceProvider: ServiceProvider!
+  "Verifier address (data service)"
+  verifier: Bytes!
+
+  # Pool state
+  "Total tokens in the pool"
+  tokens: BigInt!
+  "Total shares in the pool"
+  shares: BigInt!
+  "Tokens currently thawing"
+  tokensThawing: BigInt!
+  "Shares currently thawing"
+  sharesThawing: BigInt!
+
+  # Counts
+  "Number of delegators in this pool"
+  countDelegators: Int!
+
+  # Delegations
+  "Delegations to this pool"
+  delegations: [Delegation!]! @derivedFrom(field: "pool")
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type Delegator @entity(immutable: false) {
+  "Delegator address"
+  id: Bytes!
+
+  # Aggregates
+  "Total tokens delegated across all pools"
+  tokensDelegated: BigInt!
+  "Number of active delegations"
+  countDelegations: Int!
+
+  # Delegations
+  "All delegations by this delegator"
+  delegations: [Delegation!]! @derivedFrom(field: "delegator")
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type Delegation @entity(immutable: false) {
+  "Composite ID: delegator-serviceProvider-verifier"
+  id: Bytes!
+
+  # Relationships
+  "Delegator who owns this delegation"
+  delegator: Delegator!
+  "Delegation pool this belongs to"
+  pool: DelegationPool!
+
+  # Delegation state
+  "Shares owned in the pool"
+  shares: BigInt!
+  "Tokens locked (cannot be undelegated)"
+  tokensLocked: BigInt!
+  "Timestamp until tokens are locked"
+  tokensLockedUntil: BigInt!
 
   # Metadata
   "Block number when entity was created"

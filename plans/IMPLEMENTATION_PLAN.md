@@ -4,125 +4,95 @@ Incremental implementation with validation checkpoints between stages.
 
 ## High-Level Stages
 
-| Stage | Focus | Entities | Validation |
-|-------|-------|----------|------------|
-| 1 | Boilerplate | - | Project builds, deploys empty subgraph |
-| 2 | Service Provider Stake | `GraphNetwork`, `ServiceProvider` | Query SPs, verify stake totals |
-| 3 | Provisions | `Provision`, `DataService` | Query provisions, verify tokensProvisioned |
-| 4 | Delegation | `Delegator`, `Delegation`, `DelegationPool` | Query delegations, verify pool math |
-| 5 | Thaw Requests | `ProvisionThawRequest`, `DelegationThawRequest` | Query pending thaws, verify lifecycle |
-| 6 | Operators | `Operator`, `OperatorAuthorization` | Query authorizations |
-| 7 | Payments & Escrow | `Payer`, `Collector`, `EscrowAccount` | Query escrow balances |
-| 8 | Slashing & Fees | Slashing fields, `ProvisionFeeCut` | Verify slash accounting |
+| Stage | Focus | Entities | Status |
+|-------|-------|----------|--------|
+| 1 | Boilerplate | - | ✅ Complete |
+| 2 | Service Provider Stake | `GraphNetwork`, `ServiceProvider` | ✅ Complete |
+| 3 | Provisions | `Provision`, `DataService` | ✅ Complete |
+| 4 | Delegation | `Delegator`, `Delegation`, `DelegationPool` | ✅ Complete |
+| 5 | Thaw Requests | `ProvisionThawRequest`, `DelegationThawRequest` | Pending |
+| 6 | Operators | `Operator`, `OperatorAuthorization` | Pending |
+| 7 | Payments & Escrow | `Payer`, `Collector`, `EscrowAccount` | Pending |
+| 8 | Slashing & Fees | Slashing fields, `ProvisionFeeCut` | Pending |
 
 ---
 
-## Stage 1: Boilerplate
+## Stage 4: Delegation
 
 ### Goal
-Project structure, build pipeline, empty deployable subgraph.
+Track delegations to service providers, including migration of ~310k legacy delegators.
 
-### Deliverables
+### Migration Challenge
 
-**1. Project structure:**
-```
-network-subgraph/
-├── src/
-│   ├── common/
-│   │   ├── constants.ts
-│   │   ├── numbers.ts
-│   │   └── ids.ts
-│   ├── config/
-│   │   ├── index.ts
-│   │   └── mainnet.ts
-│   ├── entities/
-│   │   └── (empty for now)
-│   └── handlers/
-│       └── (empty for now)
-├── abis/
-│   └── HorizonStaking.json
-├── schema.graphql
-├── subgraph.yaml
-├── package.json
-└── tsconfig.json
-```
+Legacy delegations were auto-assigned to **Subgraph Service** without emitting events. Analysis:
 
-**2. Minimal schema** (just enough to deploy):
-```graphql
-type GraphNetwork @entity {
-  id: Bytes!
-}
+| Metric | Count |
+|--------|-------|
+| Total delegators | ~310,000 |
+| Delegations >= 100 GRT | ~23,000 (7%) |
+| Delegations < 100 GRT | ~287,000 (93%) - mostly Coinbase Earn dust |
+
+### Migration Strategy: Hybrid Seeding
+
+**Tier 1 - Proactive seeding at genesis:**
+- `DelegationPool` entities (~181) - one per service provider for Subgraph Service
+- `Delegation` entities (~23k) - delegations >= 100 GRT threshold
+- `Delegator` entities (~23k) - corresponding delegators
+
+**Tier 2 - Lazy initialization on interaction:**
+- Delegations < 100 GRT created when delegator first interacts with Horizon
+- Contract call to `getDelegation()` fetches current state
+
+### Seed Data
+
+Generated via `packages/tools`:
+```bash
+cd packages/tools
+NETWORK=arbitrum-one pnpm seed:indexers      # -> indexer-seed.ts
+NETWORK=arbitrum-one pnpm seed:delegations   # -> delegation-seed.ts
 ```
 
-**3. Config setup:**
-```typescript
-// config/mainnet.ts
-export const config = {
-  network: "mainnet",
-  horizonStakingAddress: "0x...",
-  startBlock: 12345678,
-}
-```
-
-**4. Common utilities:**
-- `constants.ts`: BIGINT_ZERO, BIGINT_ONE
-- `numbers.ts`: bigIntToBigDecimal, safeDiv (if needed)
-- `ids.ts`: twoPartId, threePartId
-
-**5. Manifest with placeholder handler:**
-```yaml
-specVersion: 1.0.0
-indexerHints:
-  prune: auto
-dataSources:
-  - kind: ethereum
-    name: HorizonStaking
-    source:
-      address: "0x..."
-      abi: HorizonStaking
-      startBlock: 12345678
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      entities:
-        - GraphNetwork
-      abis:
-        - name: HorizonStaking
-          file: ./abis/HorizonStaking.json
-      eventHandlers:
-        - event: HorizonStakeDeposited(indexed address,uint256)
-          handler: handleHorizonStakeDeposited
-```
-
-### Validation Checkpoint
-- [ ] `graph codegen` succeeds
-- [ ] `graph build` succeeds
-- [ ] Deploy to local graph-node or hosted service
-- [ ] GraphQL playground loads (empty data is fine)
-
----
-
-## Stage 2: Service Provider Stake
-
-### Goal
-Service providers with stake, including migration of ~180 existing SPs.
+Output files in `packages/subgraph/src/config/arbitrum-one/`:
+- `indexer-seed.ts` - SERVICE_PROVIDER_ADDRESSES
+- `delegation-seed.ts` - DELEGATED_INDEXER_ADDRESSES, DELEGATION_SEED_DATA
 
 ### Deliverables
 
 **1. Schema additions:**
 ```graphql
-type GraphNetwork @entity {
-  id: Bytes!
-  countServiceProviders: Int!
-  tokensStaked: BigInt!
+type DelegationPool @entity {
+  id: Bytes!  # serviceProvider-verifier
+  serviceProvider: ServiceProvider!
+  verifier: Bytes!
+  tokens: BigInt!
+  shares: BigInt!
+  tokensThawing: BigInt!
+  sharesThawing: BigInt!
+  countDelegators: Int!
+  createdAtBlock: BigInt!
+  createdAt: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAt: BigInt!
 }
 
-type ServiceProvider @entity {
-  id: Bytes!
-  tokensStaked: BigInt!
-  tokensProvisioned: BigInt!
-  tokensIdle: BigInt!
+type Delegator @entity {
+  id: Bytes!  # delegator address
+  tokensDelegated: BigInt!
+  countDelegations: Int!
+  delegations: [Delegation!]! @derivedFrom(field: "delegator")
+  createdAtBlock: BigInt!
+  createdAt: BigInt!
+  updatedAtBlock: BigInt!
+  updatedAt: BigInt!
+}
+
+type Delegation @entity {
+  id: Bytes!  # delegator-serviceProvider-verifier
+  delegator: Delegator!
+  pool: DelegationPool!
+  shares: BigInt!
+  tokensLocked: BigInt!
+  tokensLockedUntil: BigInt!
   createdAtBlock: BigInt!
   createdAt: BigInt!
   updatedAtBlock: BigInt!
@@ -130,96 +100,121 @@ type ServiceProvider @entity {
 }
 ```
 
-**2. Entity helpers:**
+**2. Update ServiceProvider:**
+```graphql
+type ServiceProvider @entity {
+  # ... existing fields ...
+  tokensDelegated: BigInt!
+  countDelegators: Int!
+  delegationPools: [DelegationPool!]! @derivedFrom(field: "serviceProvider")
+}
+```
+
+**3. Update GraphNetwork:**
+```graphql
+type GraphNetwork @entity {
+  # ... existing fields ...
+  tokensDelegated: BigInt!
+  countDelegators: Int!
+  countDelegationPools: Int!
+}
+```
+
+**4. Entity helpers:**
 ```
 src/entities/
-├── graphNetwork.ts    # getOrCreateGraphNetwork()
-└── serviceProvider.ts # getOrCreateServiceProvider()
+├── delegationPool.ts   # getOrCreateDelegationPool()
+├── delegator.ts        # getOrCreateDelegator()
+└── delegation.ts       # getOrCreateDelegation()
 ```
 
-**3. Migration handler:**
+**5. Migration seeding (update existing handler):**
 ```
-src/handlers/migration.ts  # handleStartBlock()
-src/config/serviceProviders.ts  # List of 180 addresses
-```
-
-**4. Event handlers:**
-```
-src/handlers/staking.ts
-├── handleHorizonStakeDeposited()
-└── handleHorizonStakeWithdrawn()
+src/handlers/migration.ts
+├── seedServiceProviders()      # existing
+├── seedDelegationPools()       # NEW - seed ~181 pools
+└── seedDelegations()           # NEW - seed ~23k delegations
 ```
 
-**5. Manifest updates:**
-- Add block handler with `filter: kind: once`
-- Add HorizonStakeWithdrawn event handler
+**6. Event handlers:**
+```
+src/handlers/delegation.ts
+├── handleTokensDelegated()
+├── handleTokensUndelegated()
+├── handleDelegatedTokensWithdrawn()
+└── handleDelegationSlashed()
+```
 
-### Handler Logic Summary
+### Implementation Steps
 
-**handleStartBlock:**
-1. Create GraphNetwork singleton
-2. Loop through 180 SP addresses
-3. For each: call `getStake()`, `getIdleStake()`, create entity
-4. Tally totals on GraphNetwork
+**Step 1: Update schema** - Add DelegationPool, Delegator, Delegation entities ✅
 
-**handleHorizonStakeDeposited:**
-1. getOrCreateServiceProvider
-2. Add tokens to `tokensStaked`
-3. Recalculate `tokensIdle`
-4. Update GraphNetwork totals
-5. Update metadata (updatedAt, updatedAtBlock)
+**Step 2: Add entity helpers** - Create/load functions with contract call fallback ✅
 
-**handleHorizonStakeWithdrawn:**
-1. Load ServiceProvider
-2. Subtract tokens from `tokensStaked`
-3. Recalculate `tokensIdle`
-4. Update GraphNetwork totals
-5. Update metadata
+**Step 3: Update genesis seeding** - Seed DelegationPools and Delegations from seed data ✅
+
+**Step 4: Add event handlers** - Handle delegation lifecycle events ✅
+
+**Step 5: Update subgraph.yaml** - Add delegation event handlers ✅
+
+### Seeding Threshold
+
+Due to AssemblyScript compiler limits, seeding uses a **50,000 GRT threshold**:
+- Delegations seeded: 2,579
+- Unique delegators: 1,754
+- Delegations < 50k GRT are created lazily on first interaction
+
+### Contract Calls
+
+```typescript
+// For seeding
+getDelegationPool(serviceProvider, verifier) -> (tokens, shares, tokensThawing, sharesThawing)
+getDelegation(serviceProvider, verifier, delegator) -> (shares, tokensLocked, tokensLockedUntil)
+
+// Built-in multicall for batching
+multicall(bytes[] calldata data) -> bytes[] results
+```
 
 ### Validation Checkpoint
 
-**Queries to run:**
+**Queries:**
 ```graphql
-# Check GraphNetwork totals
 {
-  graphNetwork(id: "0x01") {
-    countServiceProviders
-    tokensStaked
+  graphNetwork(id: "0x01000000") {
+    tokensDelegated
+    countDelegators
+    countDelegationPools
   }
 }
 
-# Check individual SP
 {
-  serviceProvider(id: "0x...known-sp-address...") {
-    tokensStaked
-    tokensIdle
-  }
-}
-
-# List all SPs
-{
-  serviceProviders(first: 10, orderBy: tokensStaked, orderDirection: desc) {
+  delegationPools(first: 10, orderBy: tokens, orderDirection: desc) {
     id
-    tokensStaked
+    tokens
+    shares
+    countDelegators
+  }
+}
+
+{
+  delegators(first: 10, orderBy: tokensDelegated, orderDirection: desc) {
+    id
+    tokensDelegated
+    countDelegations
   }
 }
 ```
 
-**Validation checks:**
-- [ ] `countServiceProviders` = 180 (or current count)
-- [ ] `tokensStaked` on GraphNetwork = sum of all SP stakes
-- [ ] Known SP addresses have expected stake values (compare to contract)
-- [ ] After a new stake event: values update correctly
+**Checks:**
+- [ ] DelegationPool count matches seeded indexers (~181)
+- [ ] Delegation count matches seeded delegations (~23k)
+- [ ] Pool tokens/shares match on-chain `getDelegationPool()` values
+- [ ] ServiceProvider.tokensDelegated matches sum of pool tokens
+- [ ] New delegation events update entities correctly
 
 ---
 
-## Stages 3-8: To Be Detailed Later
-
-Will detail these after Stage 2 is validated. High-level scope:
-
-**Stage 3 - Provisions:** ProvisionCreated, ProvisionIncreased, ProvisionParametersStaged/Set, TokensDeprovisioned. Links SP to DataService.
-
-**Stage 4 - Delegation:** Migration of legacy delegations to Subgraph Service. TokensDelegated, TokensUndelegated, DelegatedTokensWithdrawn.
+## Stages 5-8: To Be Detailed Later
 
 **Stage 5 - Thaw Requests:** ThawRequestCreated, ThawRequestFulfilled, ThawRequestsFulfilled. Both provision and delegation types.
 

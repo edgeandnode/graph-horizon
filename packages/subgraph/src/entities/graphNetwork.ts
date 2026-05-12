@@ -7,8 +7,11 @@ export function getOrCreateGraphNetwork(): GraphNetwork {
     entity = new GraphNetwork(GRAPH_NETWORK_ID)
     entity.countServiceProviders = 0
     entity.countProvisions = 0
+    entity.countDelegationPools = 0
+    entity.countDelegators = 0
     entity.tokensStaked = BIGINT_ZERO
     entity.tokensProvisioned = BIGINT_ZERO
+    entity.tokensDelegated = BIGINT_ZERO
   }
   return entity
 }

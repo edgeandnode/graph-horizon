@@ -10,3 +10,9 @@ export {
   handleProvisionParametersSet,
   handleTokensDeprovisioned
 } from "./handlers/provision"
+export {
+  handleTokensDelegated,
+  handleTokensUndelegated,
+  handleDelegatedTokensWithdrawn,
+  handleDelegationSlashed
+} from "./handlers/delegation"

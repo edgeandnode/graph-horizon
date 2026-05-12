@@ -11,6 +11,7 @@ import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { migrateServiceProviders } from "../src/handlers/migration"
 import { GRAPH_NETWORK_ID } from "../src/common/constants"
 import { testConfig, NetworkConfig } from "../src/config"
+import { encodeGetStake } from "../src/common/multicall"
 
 // Helper to create a mock block
 function createMockBlock(number: i32, timestamp: i32): ethereum.Block {
@@ -33,11 +34,29 @@ function createMockBlock(number: i32, timestamp: i32): ethereum.Block {
   )
 }
 
-// Helper to mock getStake for test addresses
-function mockGetStake(address: Address, stake: BigInt): void {
-  createMockedFunction(testConfig.horizonStakingAddress, "getStake", "getStake(address):(uint256)")
-    .withArgs([ethereum.Value.fromAddress(address)])
-    .returns([ethereum.Value.fromUnsignedBigInt(stake)])
+// Helper to encode a uint256 result for multicall
+function encodeUint256Result(value: BigInt): Bytes {
+  let encoded = ethereum.encode(ethereum.Value.fromUnsignedBigInt(value))!
+  return Bytes.fromUint8Array(encoded)
+}
+
+// Helper to mock multicall for getStake calls
+function mockMulticallGetStakes(addresses: Address[], stakes: BigInt[]): void {
+  // Build the expected calls array
+  let calls: Bytes[] = []
+  for (let i = 0; i < addresses.length; i++) {
+    calls.push(encodeGetStake(addresses[i]))
+  }
+
+  // Build the expected results array
+  let results: Bytes[] = []
+  for (let i = 0; i < stakes.length; i++) {
+    results.push(encodeUint256Result(stakes[i]))
+  }
+
+  createMockedFunction(testConfig.horizonStakingAddress, "multicall", "multicall(bytes[]):(bytes[])")
+    .withArgs([ethereum.Value.fromBytesArray(calls)])
+    .returns([ethereum.Value.fromBytesArray(results)])
 }
 
 describe("migrateServiceProviders", () => {
@@ -57,9 +76,13 @@ describe("migrateServiceProviders", () => {
     let stake3 = BigInt.fromString("3000000000000000000000") // 3000 GRT
     let totalStake = stake1.plus(stake2).plus(stake3)
 
-    mockGetStake(Address.fromString("0x1111111111111111111111111111111111111111"), stake1)
-    mockGetStake(Address.fromString("0x2222222222222222222222222222222222222222"), stake2)
-    mockGetStake(Address.fromString("0x3333333333333333333333333333333333333333"), stake3)
+    let addresses = [
+      Address.fromString("0x1111111111111111111111111111111111111111"),
+      Address.fromString("0x2222222222222222222222222222222222222222"),
+      Address.fromString("0x3333333333333333333333333333333333333333"),
+    ]
+    let stakes = [stake1, stake2, stake3]
+    mockMulticallGetStakes(addresses, stakes)
 
     // Execute
     let block = createMockBlock(100, 1000)
@@ -82,9 +105,13 @@ describe("migrateServiceProviders", () => {
   })
 
   test("handles zero stake correctly", () => {
-    mockGetStake(Address.fromString("0x1111111111111111111111111111111111111111"), BigInt.fromI32(0))
-    mockGetStake(Address.fromString("0x2222222222222222222222222222222222222222"), BigInt.fromI32(0))
-    mockGetStake(Address.fromString("0x3333333333333333333333333333333333333333"), BigInt.fromI32(0))
+    let addresses = [
+      Address.fromString("0x1111111111111111111111111111111111111111"),
+      Address.fromString("0x2222222222222222222222222222222222222222"),
+      Address.fromString("0x3333333333333333333333333333333333333333"),
+    ]
+    let stakes = [BigInt.fromI32(0), BigInt.fromI32(0), BigInt.fromI32(0)]
+    mockMulticallGetStakes(addresses, stakes)
 
     let block = createMockBlock(100, 1000)
     migrateServiceProviders(block, testConfig)
@@ -95,9 +122,13 @@ describe("migrateServiceProviders", () => {
   })
 
   test("sets correct block metadata on ServiceProviders", () => {
-    mockGetStake(Address.fromString("0x1111111111111111111111111111111111111111"), BigInt.fromI32(100))
-    mockGetStake(Address.fromString("0x2222222222222222222222222222222222222222"), BigInt.fromI32(100))
-    mockGetStake(Address.fromString("0x3333333333333333333333333333333333333333"), BigInt.fromI32(100))
+    let addresses = [
+      Address.fromString("0x1111111111111111111111111111111111111111"),
+      Address.fromString("0x2222222222222222222222222222222222222222"),
+      Address.fromString("0x3333333333333333333333333333333333333333"),
+    ]
+    let stakes = [BigInt.fromI32(100), BigInt.fromI32(100), BigInt.fromI32(100)]
+    mockMulticallGetStakes(addresses, stakes)
 
     let block = createMockBlock(408825706, 1700000000)
     migrateServiceProviders(block, testConfig)
@@ -120,8 +151,10 @@ describe("migrateServiceProviders with empty config", () => {
     let emptyConfig = new NetworkConfig(
       "test-empty",
       testConfig.horizonStakingAddress,
+      testConfig.subgraphServiceAddress,
       1,
-      [] // empty addresses
+      [], // empty service provider addresses
+      []  // empty delegated indexer addresses
     )
 
     let block = createMockBlock(100, 1000)

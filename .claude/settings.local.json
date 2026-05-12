@@ -24,7 +24,9 @@
       "Bash(pnpm add:*)",
       "Bash(npx tsx:*)",
       "Bash(cast sig:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:*)"
     ]
   }
 }

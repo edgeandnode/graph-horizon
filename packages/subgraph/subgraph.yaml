@@ -19,6 +19,9 @@ dataSources:
         - GraphNetwork
         - ServiceProvider
         - Provision
+        - DelegationPool
+        - Delegator
+        - Delegation
       abis:
         - name: HorizonStaking
           file: ./abis/HorizonStaking.json
@@ -45,4 +48,13 @@ dataSources:
           handler: handleProvisionParametersSet
         - event: TokensDeprovisioned(indexed address,indexed address,uint256)
           handler: handleTokensDeprovisioned
+        # Delegation events
+        - event: TokensDelegated(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTokensDelegated
+        - event: TokensUndelegated(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTokensUndelegated
+        - event: DelegatedTokensWithdrawn(indexed address,indexed address,indexed address,uint256)
+          handler: handleDelegatedTokensWithdrawn
+        - event: DelegationSlashed(indexed address,indexed address,uint256)
+          handler: handleDelegationSlashed
       file: ./src/mapping.ts

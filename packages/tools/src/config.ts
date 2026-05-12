@@ -8,7 +8,6 @@ export interface NetworkConfig {
   subgraphServiceAddress: string
   legacySubgraphId: string
   horizonGenesisBlock: number
-  delegationSeedThresholdGRT: number
   subgraphConfigPath: string
 }
 
@@ -20,7 +19,6 @@ const configs: Record<string, NetworkConfig> = {
     subgraphServiceAddress: "0xb2Bb92d0DE618878E438b55D5846cfecD9301105",
     legacySubgraphId: "DZz4kDTdmzWLWsV373w2bSmoar3umKKH9y82SUKr5qmp",
     horizonGenesisBlock: 408825706,
-    delegationSeedThresholdGRT: 100,
     subgraphConfigPath: path.resolve(process.cwd(), "../subgraph/src/config/arbitrum-one"),
   },
   // Add more networks here
