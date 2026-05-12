@@ -4,6 +4,7 @@ import { getConfig } from "./config"
 const GET_STAKE_SELECTOR = "0x7a766460" // getStake(address)
 const GET_SERVICE_PROVIDER_SELECTOR = "0x8cc01c86" // getServiceProvider(address)
 const GET_PROVISION_SELECTOR = "0x25d9897e" // getProvision(address,address)
+const GET_DELEGATION_POOL_SELECTOR = "0x561285e4" // getDelegationPool(address,address)
 
 export interface ServiceProviderData {
   tokensStaked: bigint
@@ -20,6 +21,14 @@ export interface ProvisionData {
   maxVerifierCutPending: bigint
   thawingPeriodPending: bigint
   lastParametersStagedAt: bigint
+  thawingNonce: bigint
+}
+
+export interface DelegationPoolData {
+  tokens: bigint
+  shares: bigint
+  tokensThawing: bigint
+  sharesThawing: bigint
   thawingNonce: bigint
 }
 
@@ -96,5 +105,26 @@ export async function getProvision(serviceProvider: string, verifier: string): P
     thawingPeriodPending: BigInt("0x" + hex.slice(448, 512)),
     lastParametersStagedAt: BigInt("0x" + hex.slice(512, 576)),
     thawingNonce: BigInt("0x" + hex.slice(576, 640)),
+  }
+}
+
+export async function getDelegationPool(serviceProvider: string, verifier: string): Promise<DelegationPoolData> {
+  const config = getConfig()
+  const callData = GET_DELEGATION_POOL_SELECTOR + padAddress(serviceProvider) + padAddress(verifier)
+  const result = await ethCall(config.stakingAddress, callData)
+
+  // DelegationPool struct has 5 uint256 fields:
+  // - tokens: uint256
+  // - shares: uint256
+  // - tokensThawing: uint256
+  // - sharesThawing: uint256
+  // - thawingNonce: uint256
+  const hex = result.slice(2)
+  return {
+    tokens: BigInt("0x" + hex.slice(0, 64)),
+    shares: BigInt("0x" + hex.slice(64, 128)),
+    tokensThawing: BigInt("0x" + hex.slice(128, 192)),
+    sharesThawing: BigInt("0x" + hex.slice(192, 256)),
+    thawingNonce: BigInt("0x" + hex.slice(256, 320)),
   }
 }

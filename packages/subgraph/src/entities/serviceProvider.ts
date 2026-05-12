@@ -26,7 +26,6 @@ export function getOrCreateServiceProvider(
     entity.tokensProvisioned = BIGINT_ZERO
     entity.tokensIdle = BIGINT_ZERO
     entity.tokensDelegated = BIGINT_ZERO
-    entity.countDelegators = 0
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber

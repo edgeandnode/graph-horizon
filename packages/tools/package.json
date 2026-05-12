@@ -7,7 +7,8 @@
     "seed:indexers": "tsx src/seed/indexers.ts",
     "seed:delegations": "tsx src/seed/delegations.ts",
     "validate:stake": "tsx src/validation/stake.ts",
-    "validate:provisions": "tsx src/validation/provisions.ts"
+    "validate:provisions": "tsx src/validation/provisions.ts",
+    "validate:delegations": "tsx src/validation/delegations.ts"
   },
   "devDependencies": {
     "@types/node": "22.15.18",
