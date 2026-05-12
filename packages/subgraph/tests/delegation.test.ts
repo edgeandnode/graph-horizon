@@ -8,6 +8,7 @@ import {
 } from "matchstick-as"
 import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import {
+  TokensToDelegationPoolAdded,
   TokensDelegated,
   TokensUndelegated,
   DelegatedTokensWithdrawn,
@@ -15,6 +16,7 @@ import {
   HorizonStakeDeposited
 } from "../generated/HorizonStaking/HorizonStaking"
 import {
+  handleTokensToDelegationPoolAdded,
   handleTokensDelegated,
   handleTokensUndelegated,
   handleDelegatedTokensWithdrawn,
@@ -115,9 +117,62 @@ function createDelegationSlashedEvent(
   return event
 }
 
+// Helper to create TokensToDelegationPoolAdded event
+function createTokensToDelegationPoolAddedEvent(
+  serviceProvider: Address,
+  verifier: Address,
+  tokens: BigInt
+): TokensToDelegationPoolAdded {
+  let event = newTypedMockEvent<TokensToDelegationPoolAdded>()
+  event.parameters = new Array()
+  event.parameters.push(new ethereum.EventParam("serviceProvider", ethereum.Value.fromAddress(serviceProvider)))
+  event.parameters.push(new ethereum.EventParam("verifier", ethereum.Value.fromAddress(verifier)))
+  event.parameters.push(new ethereum.EventParam("tokens", ethereum.Value.fromUnsignedBigInt(tokens)))
+  event.block.number = BigInt.fromI32(600)
+  event.block.timestamp = BigInt.fromI32(6000)
+  return event
+}
+
 function getDelegationPoolIdString(sp: Address, verifier: Address): string {
   return getDelegationPoolId(Bytes.fromHexString(sp.toHexString()), Bytes.fromHexString(verifier.toHexString())).toHexString()
 }
+
+describe("TokensToDelegationPoolAdded", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  test("adds tokens to pool without minting shares", () => {
+    // Setup: deposit stake and delegate
+    let stakeTokens = BigInt.fromString("10000000000000000000000")
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
+    handleHorizonStakeDeposited(depositEvent)
+
+    let delegatedTokens = BigInt.fromString("1000000000000000000000") // 1000 GRT
+    let shares = BigInt.fromString("1000000000000000000000")
+    let delegateEvent = createTokensDelegatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, DELEGATOR_ADDRESS, delegatedTokens, shares)
+    handleTokensDelegated(delegateEvent)
+
+    let poolId = getDelegationPoolIdString(SP_ADDRESS, VERIFIER_ADDRESS)
+
+    // Add tokens to pool (e.g., rewards)
+    let addedTokens = BigInt.fromString("100000000000000000000") // 100 GRT
+    let event = createTokensToDelegationPoolAddedEvent(SP_ADDRESS, VERIFIER_ADDRESS, addedTokens)
+    handleTokensToDelegationPoolAdded(event)
+
+    let totalTokens = delegatedTokens.plus(addedTokens)
+
+    // Pool: tokens increased, shares unchanged
+    assert.fieldEquals("DelegationPool", poolId, "tokens", totalTokens.toString())
+    assert.fieldEquals("DelegationPool", poolId, "shares", shares.toString())
+
+    // ServiceProvider: tokensDelegated increased
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensDelegated", totalTokens.toString())
+
+    // GraphNetwork: tokensDelegated increased
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensDelegated", totalTokens.toString())
+  })
+})
 
 describe("TokensDelegated", () => {
   beforeEach(() => {
