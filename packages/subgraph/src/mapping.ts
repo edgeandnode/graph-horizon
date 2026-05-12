@@ -11,6 +11,7 @@ export {
   handleTokensDeprovisioned
 } from "./handlers/provision"
 export {
+  handleTokensToDelegationPoolAdded,
   handleTokensDelegated,
   handleTokensUndelegated,
   handleDelegatedTokensWithdrawn,

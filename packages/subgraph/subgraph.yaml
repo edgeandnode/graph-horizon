@@ -49,6 +49,8 @@ dataSources:
         - event: TokensDeprovisioned(indexed address,indexed address,uint256)
           handler: handleTokensDeprovisioned
         # Delegation events
+        - event: TokensToDelegationPoolAdded(indexed address,indexed address,uint256)
+          handler: handleTokensToDelegationPoolAdded
         - event: TokensDelegated(indexed address,indexed address,indexed address,uint256,uint256)
           handler: handleTokensDelegated
         - event: TokensUndelegated(indexed address,indexed address,indexed address,uint256,uint256)

@@ -1,5 +1,6 @@
 import { Bytes } from "@graphprotocol/graph-ts"
 import {
+  TokensToDelegationPoolAdded,
   TokensDelegated,
   TokensUndelegated,
   DelegatedTokensWithdrawn,
@@ -145,5 +146,38 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
   let graphNetwork = getOrCreateGraphNetwork()
   assert(graphNetwork.tokensDelegated >= tokens, "Slash tokens exceed network tokens delegated.")
   graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.minus(tokens)
+  saveGraphNetwork(graphNetwork)
+}
+
+/**
+ * Handles TokensToDelegationPoolAdded event.
+ * Emitted when tokens are added directly to a delegation pool (e.g., payments, rewards).
+ */
+export function handleTokensToDelegationPoolAdded(event: TokensToDelegationPoolAdded): void {
+  let serviceProviderAddress = event.params.serviceProvider
+  let verifier = event.params.verifier
+  let tokens = event.params.tokens
+
+  let serviceProviderBytes = Bytes.fromHexString(serviceProviderAddress.toHexString()) as Bytes
+  let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
+
+  // Update DelegationPool
+  let pool = getOrCreateDelegationPool(
+    serviceProviderBytes,
+    verifierBytes,
+    event.block.number,
+    event.block.timestamp
+  )
+  pool.entity.tokens = pool.entity.tokens.plus(tokens)
+  saveDelegationPool(pool.entity, event.block)
+
+  // Update ServiceProvider
+  let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
+  serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(tokens)
+  saveServiceProvider(serviceProvider.entity, event.block)
+
+  // Update GraphNetwork
+  let graphNetwork = getOrCreateGraphNetwork()
+  graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.plus(tokens)
   saveGraphNetwork(graphNetwork)
 }
