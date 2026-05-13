@@ -52,7 +52,8 @@ describe("HorizonStakeDeposited", () => {
     assert.entityCount("ServiceProvider", 1)
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", tokens.toString())
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "0")
-    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "0")
+    // tokensIdle = tokensStaked - tokensProvisioned = 1000 GRT
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", tokens.toString())
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "createdAtBlock", "100")
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "createdAt", "1000")
 
@@ -133,25 +134,32 @@ describe("HorizonStakeWithdrawn", () => {
     handleHorizonStakeWithdrawn(withdrawEvent)
 
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", remainingStake.toString())
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", remainingStake.toString())
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "updatedAtBlock", "200")
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "updatedAt", "2000")
 
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensStaked", remainingStake.toString())
-    // Count should remain 1 (we don't decrement on withdraw)
+    // Count should remain 1 (partial withdrawal, still has stake)
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
   })
 
-  test("allows full withdrawal", () => {
+  test("allows full withdrawal and decrements countServiceProviders", () => {
     let stake = BigInt.fromString("1000000000000000000000") // 1000 GRT
 
     let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stake)
     handleHorizonStakeDeposited(depositEvent)
 
+    // Verify count is 1 before withdrawal
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
+
     let withdrawEvent = createStakeWithdrawnEvent(SP_ADDRESS, stake)
     handleHorizonStakeWithdrawn(withdrawEvent)
 
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "0")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "0")
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensStaked", "0")
+    // Count should decrement to 0 after full withdrawal
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "0")
   })
 
   test("handles multiple withdrawals", () => {

@@ -18,6 +18,10 @@ dataSources:
       entities:
         - GraphNetwork
         - ServiceProvider
+        - Provision
+        - DelegationPool
+        - Delegator
+        - Delegation
       abis:
         - name: HorizonStaking
           file: ./abis/HorizonStaking.json
@@ -30,4 +34,29 @@ dataSources:
           handler: handleHorizonStakeDeposited
         - event: HorizonStakeWithdrawn(indexed address,uint256)
           handler: handleHorizonStakeWithdrawn
+        - event: ProvisionCreated(indexed address,indexed address,uint256,uint32,uint64)
+          handler: handleProvisionCreated
+        - event: ProvisionIncreased(indexed address,indexed address,uint256)
+          handler: handleProvisionIncreased
+        - event: ProvisionThawed(indexed address,indexed address,uint256)
+          handler: handleProvisionThawed
+        - event: ProvisionSlashed(indexed address,indexed address,uint256)
+          handler: handleProvisionSlashed
+        - event: ProvisionParametersStaged(indexed address,indexed address,uint32,uint64)
+          handler: handleProvisionParametersStaged
+        - event: ProvisionParametersSet(indexed address,indexed address,uint32,uint64)
+          handler: handleProvisionParametersSet
+        - event: TokensDeprovisioned(indexed address,indexed address,uint256)
+          handler: handleTokensDeprovisioned
+        # Delegation events
+        - event: TokensToDelegationPoolAdded(indexed address,indexed address,uint256)
+          handler: handleTokensToDelegationPoolAdded
+        - event: TokensDelegated(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTokensDelegated
+        - event: TokensUndelegated(indexed address,indexed address,indexed address,uint256,uint256)
+          handler: handleTokensUndelegated
+        - event: DelegatedTokensWithdrawn(indexed address,indexed address,indexed address,uint256)
+          handler: handleDelegatedTokensWithdrawn
+        - event: DelegationSlashed(indexed address,indexed address,uint256)
+          handler: handleDelegationSlashed
       file: ./src/mapping.ts

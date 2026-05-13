@@ -1,4 +1,4 @@
-import { BigInt, Bytes } from "@graphprotocol/graph-ts"
+import { BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { ServiceProvider } from "../../generated/schema"
 import { BIGINT_ZERO } from "../common/constants"
 
@@ -25,6 +25,7 @@ export function getOrCreateServiceProvider(
     entity.tokensStaked = BIGINT_ZERO
     entity.tokensProvisioned = BIGINT_ZERO
     entity.tokensIdle = BIGINT_ZERO
+    entity.tokensDelegated = BIGINT_ZERO
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber
@@ -34,30 +35,8 @@ export function getOrCreateServiceProvider(
   return new ServiceProviderResult(entity, isNew)
 }
 
-export function updateServiceProviderOnStakeDeposit(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  serviceProvider.tokensStaked = serviceProvider.tokensStaked.plus(tokens)
-  // TODO: Update tokensIdle when provision handlers are implemented
-  // serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
-}
-
-export function updateServiceProviderOnStakeWithdraw(
-  serviceProvider: ServiceProvider,
-  tokens: BigInt,
-  blockNumber: BigInt,
-  timestamp: BigInt
-): void {
-  assert(serviceProvider.tokensStaked >= tokens, "Withdraw exceeds staked tokens")
-
-  serviceProvider.tokensStaked = serviceProvider.tokensStaked.minus(tokens)
-  // TODO: Update tokensIdle when provision handlers are implemented
-  // serviceProvider.tokensIdle = serviceProvider.tokensStaked.minus(serviceProvider.tokensProvisioned)
-  serviceProvider.updatedAtBlock = blockNumber
-  serviceProvider.updatedAt = timestamp
+export function saveServiceProvider(sp: ServiceProvider, block: ethereum.Block): void {
+  sp.updatedAtBlock = block.number
+  sp.updatedAt = block.timestamp
+  sp.save()
 }

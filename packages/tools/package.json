@@ -1,0 +1,21 @@
+{
+  "name": "@graphprotocol/graph-horizon-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed:indexers": "tsx src/seed/indexers.ts",
+    "seed:delegations": "tsx src/seed/delegations.ts",
+    "validate:stake": "tsx src/validation/stake.ts",
+    "validate:provisions": "tsx src/validation/provisions.ts",
+    "validate:delegations": "tsx src/validation/delegations.ts"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.18",
+    "tsx": "4.19.4",
+    "typescript": "5.8.3"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  }
+}
