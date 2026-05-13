@@ -162,10 +162,6 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
       serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(poolTokens)
       saveServiceProvider(serviceProvider.entity, block)
 
-      // Update graph network
-      if (serviceProvider.isNew) {
-        graphNetwork.countServiceProviders += 1
-      }
       graphNetwork.countDelegationPools += 1
       graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.plus(poolTokens)
     }

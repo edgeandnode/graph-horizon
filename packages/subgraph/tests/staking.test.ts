@@ -7,8 +7,9 @@ import {
   newTypedMockEvent,
 } from "matchstick-as"
 import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
-import { HorizonStakeDeposited, HorizonStakeWithdrawn } from "../generated/HorizonStaking/HorizonStaking"
+import { HorizonStakeDeposited, HorizonStakeWithdrawn, TokensDelegated } from "../generated/HorizonStaking/HorizonStaking"
 import { handleHorizonStakeDeposited, handleHorizonStakeWithdrawn } from "../src/handlers/staking"
+import { handleTokensDelegated } from "../src/handlers/delegation"
 import { GRAPH_NETWORK_ID } from "../src/common/constants"
 
 // Test addresses
@@ -34,6 +35,29 @@ function createStakeWithdrawnEvent(serviceProvider: Address, tokens: BigInt): Ho
   event.parameters.push(new ethereum.EventParam("tokens", ethereum.Value.fromUnsignedBigInt(tokens)))
   event.block.number = BigInt.fromI32(200)
   event.block.timestamp = BigInt.fromI32(2000)
+  return event
+}
+
+// Helper to create TokensDelegated event
+const VERIFIER_ADDRESS = Address.fromString("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+const DELEGATOR_ADDRESS = Address.fromString("0x9999999999999999999999999999999999999999")
+
+function createTokensDelegatedEvent(
+  serviceProvider: Address,
+  verifier: Address,
+  delegator: Address,
+  tokens: BigInt,
+  shares: BigInt
+): TokensDelegated {
+  let event = newTypedMockEvent<TokensDelegated>()
+  event.parameters = new Array()
+  event.parameters.push(new ethereum.EventParam("serviceProvider", ethereum.Value.fromAddress(serviceProvider)))
+  event.parameters.push(new ethereum.EventParam("verifier", ethereum.Value.fromAddress(verifier)))
+  event.parameters.push(new ethereum.EventParam("delegator", ethereum.Value.fromAddress(delegator)))
+  event.parameters.push(new ethereum.EventParam("tokens", ethereum.Value.fromUnsignedBigInt(tokens)))
+  event.parameters.push(new ethereum.EventParam("shares", ethereum.Value.fromUnsignedBigInt(shares)))
+  event.block.number = BigInt.fromI32(150)
+  event.block.timestamp = BigInt.fromI32(1500)
   return event
 }
 
@@ -143,7 +167,7 @@ describe("HorizonStakeWithdrawn", () => {
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
   })
 
-  test("allows full withdrawal and decrements countServiceProviders", () => {
+  test("allows full withdrawal and decrements countServiceProviders when no delegation", () => {
     let stake = BigInt.fromString("1000000000000000000000") // 1000 GRT
 
     let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stake)
@@ -158,7 +182,33 @@ describe("HorizonStakeWithdrawn", () => {
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "0")
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "0")
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensStaked", "0")
-    // Count should decrement to 0 after full withdrawal
+    // Count should decrement to 0 after full withdrawal (no delegation)
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "0")
+  })
+
+  test("decrements countServiceProviders on full withdrawal even with delegation", () => {
+    let stake = BigInt.fromString("1000000000000000000000") // 1000 GRT
+
+    // First deposit stake
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stake)
+    handleHorizonStakeDeposited(depositEvent)
+
+    // Then receive delegation
+    let delegatedTokens = BigInt.fromString("500000000000000000000") // 500 GRT
+    let shares = BigInt.fromString("500000000000000000000")
+    let delegateEvent = createTokensDelegatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, DELEGATOR_ADDRESS, delegatedTokens, shares)
+    handleTokensDelegated(delegateEvent)
+
+    // Verify count is still 1 (no double counting)
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
+
+    // Withdraw all stake
+    let withdrawEvent = createStakeWithdrawnEvent(SP_ADDRESS, stake)
+    handleHorizonStakeWithdrawn(withdrawEvent)
+
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", "0")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensDelegated", delegatedTokens.toString())
+    // countServiceProviders tracks SPs with stake > 0, so it decrements regardless of delegation
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "0")
   })
 

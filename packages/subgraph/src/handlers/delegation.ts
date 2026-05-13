@@ -9,6 +9,7 @@ import {
 import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
 import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
 import { getOrCreateDelegationPool, saveDelegationPool } from "../entities/delegationPool"
+import { BIGINT_ZERO } from "../common/constants"
 
 /**
  * Handles TokensDelegated event.
@@ -36,6 +37,7 @@ export function handleTokensDelegated(event: TokensDelegated): void {
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
   serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(tokens)
   saveServiceProvider(serviceProvider.entity, event.block)
 
@@ -62,14 +64,14 @@ export function handleTokensUndelegated(event: TokensUndelegated): void {
   let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
 
   // Update DelegationPool - shares burned, tokens start thawing
-  // Note: sharesThawing not tracked here - it's a calculated value in the contract
-  // that differs from the delegation shares being burned
   let pool = getOrCreateDelegationPool(
     serviceProviderBytes,
     verifierBytes,
     event.block.number,
     event.block.timestamp
   )
+  assert(!pool.isNew, "Delegation pool does not exist.")
+  assert(pool.entity.shares >= shares, "Undelegated shares exceed pool shares.")
   pool.entity.shares = pool.entity.shares.minus(shares)
   pool.entity.tokensThawing = pool.entity.tokensThawing.plus(tokens)
   saveDelegationPool(pool.entity, event.block)
@@ -94,6 +96,7 @@ export function handleDelegatedTokensWithdrawn(event: DelegatedTokensWithdrawn):
     event.block.number,
     event.block.timestamp
   )
+  assert(!pool.isNew, "Delegation pool does not exist.")
   assert(pool.entity.tokens >= tokens, "Withdraw tokens exceed pool tokens.")
   pool.entity.tokens = pool.entity.tokens.minus(tokens)
   assert(pool.entity.tokensThawing >= tokens, "Withdraw tokens exceed pool thawing tokens.")
@@ -102,6 +105,7 @@ export function handleDelegatedTokensWithdrawn(event: DelegatedTokensWithdrawn):
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
   assert(serviceProvider.entity.tokensDelegated >= tokens, "Withdraw tokens exceed service provider delegated tokens.")
   serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.minus(tokens)
   saveServiceProvider(serviceProvider.entity, event.block)
@@ -110,6 +114,10 @@ export function handleDelegatedTokensWithdrawn(event: DelegatedTokensWithdrawn):
   let graphNetwork = getOrCreateGraphNetwork()
   assert(graphNetwork.tokensDelegated >= tokens, "Withdraw tokens exceed network tokens delegated.")
   graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.minus(tokens)
+  if (pool.entity.tokens.equals(BIGINT_ZERO)) {
+    assert(graphNetwork.countDelegationPools > 0, "Delegation pool count is zero.")
+    graphNetwork.countDelegationPools -= 1
+  }
   saveGraphNetwork(graphNetwork)
 }
 
@@ -132,12 +140,14 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
     event.block.number,
     event.block.timestamp
   )
+  assert(!pool.isNew, "Delegation pool does not exist.")
   assert(pool.entity.tokens >= tokens, "Slash tokens exceed pool tokens.")
   pool.entity.tokens = pool.entity.tokens.minus(tokens)
   saveDelegationPool(pool.entity, event.block)
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
   assert(serviceProvider.entity.tokensDelegated >= tokens, "Slash tokens exceed service provider delegated tokens.")
   serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.minus(tokens)
   saveServiceProvider(serviceProvider.entity, event.block)
@@ -168,11 +178,13 @@ export function handleTokensToDelegationPoolAdded(event: TokensToDelegationPoolA
     event.block.number,
     event.block.timestamp
   )
+  assert(!pool.isNew, "Delegation pool does not exist.")
   pool.entity.tokens = pool.entity.tokens.plus(tokens)
   saveDelegationPool(pool.entity, event.block)
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
   serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(tokens)
   saveServiceProvider(serviceProvider.entity, event.block)
 
