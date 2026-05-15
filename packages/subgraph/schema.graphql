@@ -108,6 +108,10 @@ type DelegationPool @entity(immutable: false) {
   "Tokens currently thawing"
   tokensThawing: BigInt!
 
+  # Legacy delegation parameters (only set for legacy pools migrated from pre-Horizon)
+  "[Legacy] Percentage of indexing rewards for the indexer, in PPM. Used to calculate delegation rewards from legacy allocations."
+  legacyIndexingRewardCut: Int
+
   # Metadata
   "Block number when entity was created"
   createdAtBlock: BigInt!

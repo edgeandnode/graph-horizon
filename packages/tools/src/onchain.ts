@@ -150,6 +150,9 @@ export function encodeGetDelegationPool(serviceProvider: string, verifier: strin
 // Decode result helpers
 export function decodeServiceProviderResult(hex: string): ServiceProviderData {
   const data = hex.startsWith("0x") ? hex.slice(2) : hex
+  if (!data || data.length < 128) {
+    return { tokensStaked: 0n, tokensProvisioned: 0n }
+  }
   return {
     tokensStaked: BigInt("0x" + data.slice(0, 64)),
     tokensProvisioned: BigInt("0x" + data.slice(64, 128)),
@@ -158,6 +161,20 @@ export function decodeServiceProviderResult(hex: string): ServiceProviderData {
 
 export function decodeProvisionResult(hex: string): ProvisionData {
   const data = hex.startsWith("0x") ? hex.slice(2) : hex
+  if (!data || data.length < 640) {
+    return {
+      tokens: 0n,
+      tokensThawing: 0n,
+      sharesThawing: 0n,
+      maxVerifierCut: 0n,
+      thawingPeriod: 0n,
+      createdAt: 0n,
+      maxVerifierCutPending: 0n,
+      thawingPeriodPending: 0n,
+      lastParametersStagedAt: 0n,
+      thawingNonce: 0n,
+    }
+  }
   return {
     tokens: BigInt("0x" + data.slice(0, 64)),
     tokensThawing: BigInt("0x" + data.slice(64, 128)),
@@ -174,6 +191,9 @@ export function decodeProvisionResult(hex: string): ProvisionData {
 
 export function decodeDelegationPoolResult(hex: string): DelegationPoolData {
   const data = hex.startsWith("0x") ? hex.slice(2) : hex
+  if (!data || data.length < 320) {
+    return { tokens: 0n, shares: 0n, tokensThawing: 0n, sharesThawing: 0n, thawingNonce: 0n }
+  }
   return {
     tokens: BigInt("0x" + data.slice(0, 64)),
     shares: BigInt("0x" + data.slice(64, 128)),
@@ -233,18 +253,19 @@ export async function multicall(calls: string[]): Promise<string[]> {
   const result = await ethCall(config.stakingAddress, "0x" + encoded)
 
   // Decode bytes[] result
-  // - offset to array data (32 bytes)
-  // - array length (32 bytes)
-  // - offsets to each bytes element
-  // - each bytes element: length + data
+  // ABI encoding of bytes[]:
+  // - bytes 0-31: offset to array data (value 32)
+  // - bytes 32-63: array length
+  // - bytes 64+: offset pointers (32 bytes each), relative to byte 64
+  // - then: each bytes element as (length + data)
   const resultHex = result.slice(2)
   const resultLength = parseInt(resultHex.slice(64, 128), 16)
 
   const results: string[] = []
   for (let i = 0; i < resultLength; i++) {
-    const offsetPos = 128 + i * 64
+    const offsetPos = 128 + i * 64 // Position of offset[i] (byte 64 + i*32)
     const offset = parseInt(resultHex.slice(offsetPos, offsetPos + 64), 16) * 2
-    const lengthPos = 64 + offset // relative to after the initial offset
+    const lengthPos = 128 + offset // Offsets are relative to byte 64 (hex pos 128)
     const length = parseInt(resultHex.slice(lengthPos, lengthPos + 64), 16)
     const dataStart = lengthPos + 64
     const data = resultHex.slice(dataStart, dataStart + length * 2)

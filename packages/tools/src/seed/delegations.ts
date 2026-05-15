@@ -1,5 +1,6 @@
 /**
- * Exports indexer addresses for seeding DelegationPools in the Network Subgraph.
+ * Exports indexer addresses and legacy indexing reward cuts for seeding
+ * DelegationPools in the Network Subgraph.
  *
  * Only exports indexer addresses - individual delegators and delegations are
  * lazy-initialized when they first interact with the subgraph.
@@ -17,6 +18,7 @@ import { querySubgraph } from "../common"
 interface Indexer {
   id: string
   delegatedTokens: string
+  legacyIndexingRewardCut: number
 }
 
 async function main() {
@@ -43,6 +45,7 @@ async function main() {
       `{ indexers(first: 1000, orderBy: id, block: { number: ${config.horizonGenesisBlock} }, ${whereClause}) {
         id
         delegatedTokens
+        legacyIndexingRewardCut
       } }`
     )
 
@@ -76,8 +79,15 @@ async function main() {
 // Note: Individual delegators/delegations are lazy-initialized, not seeded at genesis
 
 // Indexer addresses with delegations (for DelegationPool seeding)
+// IMPORTANT: LEGACY_INDEXER_REWARD_CUTS must be in the same order as this array
 export const DELEGATED_INDEXER_ADDRESSES: string[] = [
 ${allIndexers.map((i) => `  "${i.id}",`).join("\n")}
+]
+
+// Legacy indexing reward cuts in PPM (parallel array, same order as DELEGATED_INDEXER_ADDRESSES)
+// Used to calculate delegation rewards from legacy allocations
+export const LEGACY_INDEXER_REWARD_CUTS: i32[] = [
+${allIndexers.map((i) => `  ${i.legacyIndexingRewardCut},`).join("\n")}
 ]
 `
 
@@ -88,10 +98,13 @@ ${allIndexers.map((i) => `  "${i.id}",`).join("\n")}
   console.log("")
   console.log("=== Summary ===")
   console.log(`  Indexers to seed DelegationPools: ${allIndexers.length}`)
+  console.log(`  Legacy indexing reward cuts exported: ${allIndexers.length}`)
   console.log("")
   console.log("  Estimated data size:")
   const indexerBytes = allIndexers.length * 42
+  const rewardCutBytes = allIndexers.length * 8 // i32 as string ~8 bytes
   console.log(`    Indexer addresses: ${(indexerBytes / 1024).toFixed(1)} KB`)
+  console.log(`    Reward cuts: ${(rewardCutBytes / 1024).toFixed(1)} KB`)
   console.log("")
   console.log("  Contract calls at genesis:")
   console.log(`    getDelegationPool(): ${allIndexers.length} calls`)

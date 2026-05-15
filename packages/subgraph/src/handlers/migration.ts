@@ -142,7 +142,8 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
 
     // Process results
     for (let i = 0; i < results.length; i++) {
-      let indexerAddress = Address.fromString(indexerAddresses[batchStart + i])
+      let globalIndex = batchStart + i
+      let indexerAddress = Address.fromString(indexerAddresses[globalIndex])
       let poolData = decodeGetDelegationPoolResult(results[i])
       let poolTokens = poolData[0]
 
@@ -155,6 +156,12 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
       pool.entity.tokens = poolData[0]
       pool.entity.shares = poolData[1]
       pool.entity.tokensThawing = poolData[2]
+
+      // Set legacy indexing reward cut from config (parallel array)
+      if (globalIndex < networkConfig.legacyIndexerRewardCuts.length) {
+        pool.entity.legacyIndexingRewardCut = networkConfig.legacyIndexerRewardCuts[globalIndex]
+      }
+
       saveDelegationPool(pool.entity, block)
 
       // Update service provider tokensDelegated - Note that this service provider might not exist
