@@ -42,13 +42,18 @@ export function handleRebateCollected(event: RebateCollected): void {
     event.block.number,
     event.block.timestamp
   )
-  assert(!pool.isNew, "Delegation pool does not exist.")
+  // If pool doesn't exist, indexer has no delegators to receive rewards
+  if (pool.isNew) {
+    return
+  }
   pool.entity.tokens = pool.entity.tokens.plus(delegationRewards)
   saveDelegationPool(pool.entity, event.block)
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(indexerBytes, event.block.number, event.block.timestamp)
-  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  if (serviceProvider.isNew) {
+    return
+  }
   serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(delegationRewards)
   saveServiceProvider(serviceProvider.entity, event.block)
 
@@ -104,8 +109,11 @@ export function handleAllocationClosed(event: AllocationClosed): void {
     }
   }
 
-  // Crash if not found
-  assert(foundRewardsEvent && totalRewards.notEqual(BigInt.zero()), "Could not found rewards event for allocation.")
+  // If no rewards event found or rewards are zero, nothing to do
+  // This can happen when allocation is closed without valid POI or force-closed
+  if (!foundRewardsEvent || totalRewards.equals(BigInt.zero())) {
+    return
+  }
 
   let verifier = Bytes.fromHexString(config.subgraphServiceAddress.toHexString()) as Bytes
 
@@ -116,7 +124,10 @@ export function handleAllocationClosed(event: AllocationClosed): void {
     event.block.number,
     event.block.timestamp
   )
-  assert(!pool.isNew, "Delegation pool does not exist.")
+  // If pool doesn't exist, indexer has no delegators to receive rewards
+  if (pool.isNew) {
+    return
+  }
 
   // Calculate delegation rewards using the indexer's configured cut
   // delegationRewards = totalRewards - (totalRewards * indexerCut / PPM)
@@ -135,9 +146,10 @@ export function handleAllocationClosed(event: AllocationClosed): void {
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(indexerBytes, event.block.number, event.block.timestamp)
-  assert(!serviceProvider.isNew, "Service provider does not exist.")
-  serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(delegationRewards)
-  saveServiceProvider(serviceProvider.entity, event.block)
+  if (!serviceProvider.isNew) {
+    serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(delegationRewards)
+    saveServiceProvider(serviceProvider.entity, event.block)
+  }
 
   // Update GraphNetwork
   let graphNetwork = getOrCreateGraphNetwork()
