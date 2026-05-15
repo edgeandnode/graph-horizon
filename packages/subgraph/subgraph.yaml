@@ -59,4 +59,10 @@ dataSources:
           handler: handleDelegatedTokensWithdrawn
         - event: DelegationSlashed(indexed address,indexed address,uint256)
           handler: handleDelegationSlashed
+        # Legacy delegation reward events (HorizonStakingExtension)
+        - event: RebateCollected(address,indexed address,indexed bytes32,indexed address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)
+          handler: handleRebateCollected
+        - event: AllocationClosed(indexed address,indexed bytes32,uint256,uint256,indexed address,address,bytes32,bool)
+          handler: handleAllocationClosed
+          receipt: true
       file: ./src/mapping.ts

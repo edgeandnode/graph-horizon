@@ -17,3 +17,7 @@ export {
   handleDelegatedTokensWithdrawn,
   handleDelegationSlashed
 } from "./handlers/delegation"
+export {
+  handleRebateCollected,
+  handleAllocationClosed
+} from "./handlers/legacy"

@@ -1,7 +1,7 @@
 import { Address } from "@graphprotocol/graph-ts"
 import { NetworkConfig } from "../types"
 import { SERVICE_PROVIDER_ADDRESSES } from "./indexer-seed"
-import { DELEGATED_INDEXER_ADDRESSES } from "./delegation-seed"
+import { DELEGATED_INDEXER_ADDRESSES, LEGACY_INDEXER_REWARD_CUTS } from "./delegation-seed"
 
 export const config = new NetworkConfig(
   "test",
@@ -9,5 +9,6 @@ export const config = new NetworkConfig(
   Address.fromString("0x5555555555555555555555555555555555555555"),
   1,
   SERVICE_PROVIDER_ADDRESSES,
-  DELEGATED_INDEXER_ADDRESSES
+  DELEGATED_INDEXER_ADDRESSES,
+  LEGACY_INDEXER_REWARD_CUTS
 )

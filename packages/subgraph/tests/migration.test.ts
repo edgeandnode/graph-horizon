@@ -154,7 +154,8 @@ describe("migrateServiceProviders with empty config", () => {
       testConfig.subgraphServiceAddress,
       1,
       [], // empty service provider addresses
-      []  // empty delegated indexer addresses
+      [],  // empty delegated indexer addresses
+      []   // empty legacy indexer reward cuts
     )
 
     let block = createMockBlock(100, 1000)
