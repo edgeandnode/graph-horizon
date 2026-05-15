@@ -278,7 +278,7 @@ describe("ProvisionThawed", () => {
     clearStore()
   })
 
-  test("moves tokens from active to thawing (tokensProvisioned unchanged)", () => {
+  test("adds to tokensThawing without changing tokens (tokensProvisioned unchanged)", () => {
     // Setup: deposit and create provision
     let stakeTokens = BigInt.fromString("10000000000000000000000") // 10000 GRT
     let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
@@ -294,10 +294,10 @@ describe("ProvisionThawed", () => {
     handleProvisionThawed(event)
 
     let provisionId = getProvisionIdString(SP_ADDRESS, VERIFIER_ADDRESS)
-    let remainingActiveTokens = provisionTokens.minus(thawAmount)
 
-    // Provision: tokens move from active to thawing
-    assert.fieldEquals("Provision", provisionId, "tokens", remainingActiveTokens.toString())
+    // Provision: tokens unchanged, only tokensThawing increases
+    // Contract semantics: thaw only adds to tokensThawing, doesn't decrement tokens
+    assert.fieldEquals("Provision", provisionId, "tokens", provisionTokens.toString())
     assert.fieldEquals("Provision", provisionId, "tokensThawing", thawAmount.toString())
 
     // ServiceProvider & GraphNetwork: tokensProvisioned unchanged (thawing tokens still count as provisioned)
@@ -493,6 +493,7 @@ describe("tokensIdle lifecycle", () => {
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "4000000000000000000000")
 
     // 4. Thaw 1000 GRT - tokensProvisioned stays 6000 (thawing tokens still count as provisioned)
+    // Contract semantics: thaw only adds to tokensThawing, doesn't decrement tokens
     let thawAmount = BigInt.fromString("1000000000000000000000") // 1000 GRT
     let thawEvent = createProvisionThawedEvent(SP_ADDRESS, VERIFIER_ADDRESS, thawAmount)
     handleProvisionThawed(thawEvent)
@@ -501,9 +502,9 @@ describe("tokensIdle lifecycle", () => {
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", "6000000000000000000000")
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensIdle", "4000000000000000000000")
 
-    // Verify tokensThawing on the provision
+    // Verify tokensThawing on the provision - tokens unchanged, only tokensThawing increases
     let provisionId = getProvisionIdString(SP_ADDRESS, VERIFIER_ADDRESS)
-    assert.fieldEquals("Provision", provisionId, "tokens", "5000000000000000000000")
+    assert.fieldEquals("Provision", provisionId, "tokens", "6000000000000000000000")
     assert.fieldEquals("Provision", provisionId, "tokensThawing", "1000000000000000000000")
 
     // 5. Deprovision 1000 GRT (after thawing completes) - now tokensProvisioned decreases

@@ -105,8 +105,6 @@ export function handleProvisionThawed(event: ProvisionThawed): void {
 
   // Provision
   assert(!provision.isNew, "Provision does not exist.")
-  assert(provision.entity.tokens >= event.params.tokens, "Thaw exceeds provision tokens.")
-  provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
   provision.entity.tokensThawing = provision.entity.tokensThawing.plus(event.params.tokens)
   saveProvision(provision.entity, event.block)
 
@@ -139,6 +137,8 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
 
   // Provision
   assert(!provision.isNew, "Provision does not exist.")
+  assert(provision.entity.tokens >= event.params.tokens, "Deprovision exceeds provision tokens.")
+  provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
   assert(provision.entity.tokensThawing >= event.params.tokens, "Deprovision exceeds thawing tokens.")
   provision.entity.tokensThawing = provision.entity.tokensThawing.minus(event.params.tokens)
   saveProvision(provision.entity, event.block)

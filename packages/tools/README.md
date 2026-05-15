@@ -30,7 +30,7 @@ Validates that the subgraph data is internally consistent. This catches mapping 
 | Field | Expected Value |
 |-------|----------------|
 | `tokensStaked` | Sum of `ServiceProvider.tokensStaked` |
-| `tokensProvisioned` | Sum of `Provision.tokens` |
+| `tokensProvisioned` | Sum of `Provision.tokens` (includes thawing tokens per contract semantics) |
 | `tokensDelegated` | Sum of `DelegationPool.tokens` |
 | `tokensThawingFromProvisions` | Sum of `Provision.tokensThawing` |
 | `tokensThawingFromDelegationPools` | Sum of `DelegationPool.tokensThawing` |
@@ -41,7 +41,7 @@ For each ServiceProvider, validates that aggregate fields match the sum of their
 
 | Field | Expected Value |
 |-------|----------------|
-| `tokensProvisioned` | Sum of `Provision.tokens` for this SP |
+| `tokensProvisioned` | Sum of `Provision.tokens` for this SP (includes thawing tokens) |
 | `tokensThawing` | Sum of `Provision.tokensThawing` for this SP |
 | `tokensDelegated` | Sum of `DelegationPool.tokens` for this SP |
 | `tokensDelegatedThawing` | Sum of `DelegationPool.tokensThawing` for this SP |
