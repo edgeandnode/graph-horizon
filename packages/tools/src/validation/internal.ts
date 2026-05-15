@@ -23,6 +23,7 @@ import {
 interface GraphNetwork {
   id: string
   countServiceProviders: number
+  countDataServices: number
   countProvisions: number
   countDelegationPools: number
   tokensStaked: string
@@ -42,9 +43,21 @@ interface ServiceProvider {
   tokensIdle: string
 }
 
+interface DataService {
+  id: string
+  countServiceProviders: number
+  countProvisions: number
+  countDelegationPools: number
+  tokensProvisioned: string
+  tokensDelegated: string
+  tokensThawingFromProvisions: string
+  tokensThawingFromDelegationPools: string
+}
+
 interface Provision {
   id: string
   serviceProvider: { id: string }
+  dataService: { id: string }
   tokens: string
   tokensThawing: string
 }
@@ -52,6 +65,7 @@ interface Provision {
 interface DelegationPool {
   id: string
   serviceProvider: { id: string }
+  dataService: { id: string }
   tokens: string
   tokensThawing: string
 }
@@ -64,6 +78,7 @@ const GRAPH_NETWORK_QUERY = `{
   graphNetwork(id: "0x01000000") {
     id
     countServiceProviders
+    countDataServices
     countProvisions
     countDelegationPools
     tokensStaked
@@ -86,10 +101,24 @@ const SERVICE_PROVIDERS_QUERY = `{
   }
 }`
 
+const DATA_SERVICES_QUERY = `{
+  dataServices(first: 1000) {
+    id
+    countServiceProviders
+    countProvisions
+    countDelegationPools
+    tokensProvisioned
+    tokensDelegated
+    tokensThawingFromProvisions
+    tokensThawingFromDelegationPools
+  }
+}`
+
 const PROVISIONS_QUERY = `{
   provisions(first: 1000) {
     id
     serviceProvider { id }
+    dataService { id }
     tokens
     tokensThawing
   }
@@ -99,6 +128,7 @@ const DELEGATION_POOLS_QUERY = `{
   delegationPools(first: 1000) {
     id
     serviceProvider { id }
+    dataService { id }
     tokens
     tokensThawing
   }
@@ -116,9 +146,10 @@ async function main(): Promise<number> {
 
   // Fetch all data
   console.log("=== Fetching subgraph data ===")
-  const [networkData, spData, provisionData, poolData] = await Promise.all([
+  const [networkData, spData, dsData, provisionData, poolData] = await Promise.all([
     querySubgraph<{ graphNetwork: GraphNetwork }>(subgraphUrl, GRAPH_NETWORK_QUERY),
     querySubgraph<{ serviceProviders: ServiceProvider[] }>(subgraphUrl, SERVICE_PROVIDERS_QUERY),
+    querySubgraph<{ dataServices: DataService[] }>(subgraphUrl, DATA_SERVICES_QUERY),
     querySubgraph<{ provisions: Provision[] }>(subgraphUrl, PROVISIONS_QUERY),
     querySubgraph<{ delegationPools: DelegationPool[] }>(subgraphUrl, DELEGATION_POOLS_QUERY),
   ])
@@ -130,6 +161,7 @@ async function main(): Promise<number> {
   }
 
   const serviceProviders = spData.serviceProviders
+  const dataServices = dsData.dataServices
   const provisions = provisionData.provisions
   const pools = poolData.delegationPools
 
@@ -141,6 +173,7 @@ async function main(): Promise<number> {
 
   console.log(`  GraphNetwork: found`)
   console.log(`  ServiceProviders: ${serviceProviders.length} total, ${stakedSPs.length} with stake`)
+  console.log(`  DataServices: ${dataServices.length}`)
   console.log(`  Provisions: ${provisions.length}`)
   console.log(`  DelegationPools: ${pools.length} total, ${activePools.length} with tokens`)
   console.log("")
@@ -152,6 +185,10 @@ async function main(): Promise<number> {
   console.log("=== GraphNetwork Count Validations ===")
 
   if (!validateCount("ServiceProviders", stakedSPs.length, graphNetwork.countServiceProviders)) {
+    warnings++
+  }
+
+  if (!validateCount("DataServices", dataServices.length, graphNetwork.countDataServices)) {
     warnings++
   }
 
@@ -264,6 +301,79 @@ async function main(): Promise<number> {
   }
 
   warnings += spWarnings
+
+  // ============================================================================
+  // DataService Aggregate Validations
+  // ============================================================================
+
+  console.log("=== DataService Aggregate Validations ===")
+  let dsWarnings = 0
+
+  for (const ds of dataServices) {
+    const dsProvisions = provisions.filter((p) => p.dataService.id === ds.id)
+    const dsPools = pools.filter((p) => p.dataService.id === ds.id)
+    const dsActivePools = dsPools.filter((p) => BigInt(p.tokens) > 0n)
+
+    // Count unique service providers with provisions to this data service
+    const uniqueSPs = new Set(dsProvisions.map((p) => p.serviceProvider.id))
+
+    const issues: string[] = []
+
+    // countServiceProviders should equal unique SPs with provisions
+    if (ds.countServiceProviders !== uniqueSPs.size) {
+      issues.push(`countServiceProviders: DS=${ds.countServiceProviders}, actual=${uniqueSPs.size}`)
+    }
+
+    // countProvisions should equal number of provisions
+    if (ds.countProvisions !== dsProvisions.length) {
+      issues.push(`countProvisions: DS=${ds.countProvisions}, actual=${dsProvisions.length}`)
+    }
+
+    // countDelegationPools should equal number of active pools
+    if (ds.countDelegationPools !== dsActivePools.length) {
+      issues.push(`countDelegationPools: DS=${ds.countDelegationPools}, actual=${dsActivePools.length}`)
+    }
+
+    // tokensProvisioned should equal sum of provision tokens
+    const provisionedSum = dsProvisions.reduce((sum, p) => sum + BigInt(p.tokens), 0n)
+    if (BigInt(ds.tokensProvisioned) !== provisionedSum) {
+      issues.push(`tokensProvisioned: DS=${formatGRT(BigInt(ds.tokensProvisioned))}, sum=${formatGRT(provisionedSum)}`)
+    }
+
+    // tokensThawingFromProvisions should equal sum of provision tokensThawing
+    const provisionThawingSum = dsProvisions.reduce((sum, p) => sum + BigInt(p.tokensThawing), 0n)
+    if (BigInt(ds.tokensThawingFromProvisions) !== provisionThawingSum) {
+      issues.push(`tokensThawingFromProvisions: DS=${formatGRT(BigInt(ds.tokensThawingFromProvisions))}, sum=${formatGRT(provisionThawingSum)}`)
+    }
+
+    // tokensDelegated should equal sum of pool tokens
+    const delegatedSum = dsPools.reduce((sum, p) => sum + BigInt(p.tokens), 0n)
+    if (BigInt(ds.tokensDelegated) !== delegatedSum) {
+      issues.push(`tokensDelegated: DS=${formatGRT(BigInt(ds.tokensDelegated))}, sum=${formatGRT(delegatedSum)}`)
+    }
+
+    // tokensThawingFromDelegationPools should equal sum of pool tokensThawing
+    const poolThawingSum = dsPools.reduce((sum, p) => sum + BigInt(p.tokensThawing), 0n)
+    if (BigInt(ds.tokensThawingFromDelegationPools) !== poolThawingSum) {
+      issues.push(`tokensThawingFromDelegationPools: DS=${formatGRT(BigInt(ds.tokensThawingFromDelegationPools))}, sum=${formatGRT(poolThawingSum)}`)
+    }
+
+    if (issues.length > 0) {
+      dsWarnings++
+      console.log(`WARNING: ${ds.id}`)
+      for (const issue of issues) {
+        console.log(`  ${issue}`)
+      }
+      console.log("")
+    }
+  }
+
+  if (dsWarnings === 0) {
+    console.log("All DataService aggregates match!")
+    console.log("")
+  }
+
+  warnings += dsWarnings
 
   // ============================================================================
   // Summary

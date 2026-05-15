@@ -2,6 +2,7 @@ import { ethereum, Address, log, Bytes } from "@graphprotocol/graph-ts"
 import { HorizonStaking } from "../../generated/HorizonStaking/HorizonStaking"
 import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
 import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
+import { getOrCreateDataService, saveDataService } from "../entities/dataService"
 import { getOrCreateDelegationPool, saveDelegationPool } from "../entities/delegationPool"
 import { config } from "../config"
 import { NetworkConfig } from "../config/types"
@@ -113,7 +114,12 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
 
   let stakingContract = HorizonStaking.bind(networkConfig.horizonStakingAddress)
   let verifier = networkConfig.subgraphServiceAddress
+  let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
   let graphNetwork = getOrCreateGraphNetwork()
+  let dataService = getOrCreateDataService(verifierBytes, block.number, block.timestamp)
+  if (dataService.isNew) {
+    graphNetwork.countDataServices += 1
+  }
 
   let indexerAddresses = networkConfig.delegatedIndexerAddresses
 
@@ -148,7 +154,6 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
       let poolTokens = poolData[0]
 
       let indexerBytes = Bytes.fromHexString(indexerAddress.toHexString()) as Bytes
-      let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
 
       // Create delegation pool
       let pool = getOrCreateDelegationPool(indexerBytes, verifierBytes, block.number, block.timestamp)
@@ -169,10 +174,15 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
       serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(poolTokens)
       saveServiceProvider(serviceProvider.entity, block)
 
+      // Update DataService aggregates
+      dataService.entity.countDelegationPools += 1
+      dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(poolTokens)
+
       graphNetwork.countDelegationPools += 1
       graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.plus(poolTokens)
     }
   }
 
+  saveDataService(dataService.entity, block)
   saveGraphNetwork(graphNetwork)
 }

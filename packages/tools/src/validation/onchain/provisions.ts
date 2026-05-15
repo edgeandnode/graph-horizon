@@ -19,7 +19,7 @@ import {
 interface Provision {
   id: string
   serviceProvider: { id: string }
-  verifier: string
+  dataService: { id: string }
   tokens: string
   tokensThawing: string
   maxVerifierCut: string
@@ -39,7 +39,7 @@ async function main(): Promise<number> {
     `{ provisions(first: 1000, orderBy: tokens, orderDirection: desc) {
       id
       serviceProvider { id }
-      verifier
+      dataService { id }
       tokens
       tokensThawing
       maxVerifierCut
@@ -59,7 +59,7 @@ async function main(): Promise<number> {
   let matches = 0
 
   for (const provision of provisions) {
-    const onChain = await getProvision(provision.serviceProvider.id, provision.verifier)
+    const onChain = await getProvision(provision.serviceProvider.id, provision.dataService.id)
 
     const fields = [
       compareField("tokens", BigInt(provision.tokens), onChain.tokens, true),
@@ -73,7 +73,7 @@ async function main(): Promise<number> {
     const fieldMismatches = fields.filter((f) => !f.match)
     if (fieldMismatches.length > 0) {
       mismatches++
-      console.log(`MISMATCH: ${provision.serviceProvider.id} -> ${provision.verifier}`)
+      console.log(`MISMATCH: ${provision.serviceProvider.id} -> ${provision.dataService.id}`)
       for (const m of fieldMismatches) {
         console.log(m.message)
       }

@@ -2,8 +2,8 @@ import { BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { Provision } from "../../generated/schema"
 import { BIGINT_ZERO } from "../common/constants"
 
-export function getProvisionId(serviceProvider: Bytes, verifier: Bytes): Bytes {
-  return serviceProvider.concat(verifier)
+export function getProvisionId(serviceProvider: Bytes, dataService: Bytes): Bytes {
+  return serviceProvider.concat(dataService)
 }
 
 export class ProvisionResult {
@@ -18,18 +18,18 @@ export class ProvisionResult {
 
 export function getOrCreateProvision(
   serviceProvider: Bytes,
-  verifier: Bytes,
+  dataService: Bytes,
   blockNumber: BigInt,
   timestamp: BigInt
 ): ProvisionResult {
-  let id = getProvisionId(serviceProvider, verifier)
+  let id = getProvisionId(serviceProvider, dataService)
   let entity = Provision.load(id)
   let isNew = entity == null
 
   if (entity == null) {
     entity = new Provision(id)
     entity.serviceProvider = serviceProvider
-    entity.verifier = verifier
+    entity.dataService = dataService
     entity.tokens = BIGINT_ZERO
     entity.tokensThawing = BIGINT_ZERO
     entity.maxVerifierCut = BIGINT_ZERO

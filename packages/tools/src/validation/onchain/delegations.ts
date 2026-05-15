@@ -19,7 +19,7 @@ import {
 interface DelegationPool {
   id: string
   serviceProvider: { id: string }
-  verifier: string
+  dataService: { id: string }
   tokens: string
   shares: string
   tokensThawing: string
@@ -36,7 +36,7 @@ async function main(): Promise<number> {
     `{ delegationPools(first: 1000, orderBy: tokens, orderDirection: desc) {
       id
       serviceProvider { id }
-      verifier
+      dataService { id }
       tokens
       shares
       tokensThawing
@@ -53,7 +53,7 @@ async function main(): Promise<number> {
   let matches = 0
 
   for (const pool of pools) {
-    const onChain = await getDelegationPool(pool.serviceProvider.id, pool.verifier)
+    const onChain = await getDelegationPool(pool.serviceProvider.id, pool.dataService.id)
 
     const fields = [
       compareField("tokens", BigInt(pool.tokens), onChain.tokens, true),
@@ -64,7 +64,7 @@ async function main(): Promise<number> {
     const fieldMismatches = fields.filter((f) => !f.match)
     if (fieldMismatches.length > 0) {
       mismatches++
-      console.log(`MISMATCH: ${pool.serviceProvider.id} -> ${pool.verifier}`)
+      console.log(`MISMATCH: ${pool.serviceProvider.id} -> ${pool.dataService.id}`)
       for (const m of fieldMismatches) {
         console.log(m.message)
       }

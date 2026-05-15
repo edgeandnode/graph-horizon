@@ -1,3 +1,4 @@
+import { Bytes } from "@graphprotocol/graph-ts"
 import {
   ProvisionCreated,
   ProvisionIncreased,
@@ -9,21 +10,29 @@ import {
 } from "../../generated/HorizonStaking/HorizonStaking"
 import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
 import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
+import { getOrCreateDataService, saveDataService } from "../entities/dataService"
 import { getOrCreateProvision, saveProvision } from "../entities/provision"
 
 /**
  * Emitted when a service provider creates a new provision to a verifier.
  */
 export function handleProvisionCreated(event: ProvisionCreated): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let graphNetwork = getOrCreateGraphNetwork()
   let serviceProvider = getOrCreateServiceProvider(
     event.params.serviceProvider,
     event.block.number,
     event.block.timestamp
   )
+  let dataService = getOrCreateDataService(
+    verifierBytes,
+    event.block.number,
+    event.block.timestamp
+  )
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -37,6 +46,12 @@ export function handleProvisionCreated(event: ProvisionCreated): void {
   provision.entity.thawingPeriodPending = event.params.thawingPeriod
   saveProvision(provision.entity, event.block)
 
+  // DataService
+  dataService.entity.countServiceProviders += 1
+  dataService.entity.countProvisions += 1
+  dataService.entity.tokensProvisioned = dataService.entity.tokensProvisioned.plus(event.params.tokens)
+  saveDataService(dataService.entity, event.block)
+
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
   serviceProvider.entity.countProvisions += 1
@@ -46,6 +61,9 @@ export function handleProvisionCreated(event: ProvisionCreated): void {
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
+  if (dataService.isNew) {
+    graphNetwork.countDataServices += 1
+  }
   graphNetwork.countProvisions += 1
   graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.plus(event.params.tokens)
   saveGraphNetwork(graphNetwork)
@@ -55,15 +73,22 @@ export function handleProvisionCreated(event: ProvisionCreated): void {
  * Emitted when tokens are added to an existing provision.
  */
 export function handleProvisionIncreased(event: ProvisionIncreased): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let graphNetwork = getOrCreateGraphNetwork()
   let serviceProvider = getOrCreateServiceProvider(
     event.params.serviceProvider,
     event.block.number,
     event.block.timestamp
   )
+  let dataService = getOrCreateDataService(
+    verifierBytes,
+    event.block.number,
+    event.block.timestamp
+  )
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -72,6 +97,11 @@ export function handleProvisionIncreased(event: ProvisionIncreased): void {
   assert(!provision.isNew, "Provision does not exist.")
   provision.entity.tokens = provision.entity.tokens.plus(event.params.tokens)
   saveProvision(provision.entity, event.block)
+
+  // DataService
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensProvisioned = dataService.entity.tokensProvisioned.plus(event.params.tokens)
+  saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
@@ -90,15 +120,22 @@ export function handleProvisionIncreased(event: ProvisionIncreased): void {
  * Note: Thawing tokens are still considered "provisioned".
  */
 export function handleProvisionThawed(event: ProvisionThawed): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let graphNetwork = getOrCreateGraphNetwork()
   let serviceProvider = getOrCreateServiceProvider(
     event.params.serviceProvider,
     event.block.number,
     event.block.timestamp
   )
+  let dataService = getOrCreateDataService(
+    verifierBytes,
+    event.block.number,
+    event.block.timestamp
+  )
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -107,6 +144,11 @@ export function handleProvisionThawed(event: ProvisionThawed): void {
   assert(!provision.isNew, "Provision does not exist.")
   provision.entity.tokensThawing = provision.entity.tokensThawing.plus(event.params.tokens)
   saveProvision(provision.entity, event.block)
+
+  // DataService
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensThawingFromProvisions = dataService.entity.tokensThawingFromProvisions.plus(event.params.tokens)
+  saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
@@ -122,15 +164,22 @@ export function handleProvisionThawed(event: ProvisionThawed): void {
  * Emitted when thawed tokens are removed from a provision (after thawing period completes).
  */
 export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let graphNetwork = getOrCreateGraphNetwork()
   let serviceProvider = getOrCreateServiceProvider(
     event.params.serviceProvider,
     event.block.number,
     event.block.timestamp
   )
+  let dataService = getOrCreateDataService(
+    verifierBytes,
+    event.block.number,
+    event.block.timestamp
+  )
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -142,6 +191,14 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
   assert(provision.entity.tokensThawing >= event.params.tokens, "Deprovision exceeds thawing tokens.")
   provision.entity.tokensThawing = provision.entity.tokensThawing.minus(event.params.tokens)
   saveProvision(provision.entity, event.block)
+
+  // DataService
+  assert(!dataService.isNew, "Data service does not exist.")
+  assert(dataService.entity.tokensThawingFromProvisions >= event.params.tokens, "Deprovision exceeds data service tokens thawing.")
+  dataService.entity.tokensThawingFromProvisions = dataService.entity.tokensThawingFromProvisions.minus(event.params.tokens)
+  assert(dataService.entity.tokensProvisioned >= event.params.tokens, "Deprovision exceeds data service tokens provisioned.")
+  dataService.entity.tokensProvisioned = dataService.entity.tokensProvisioned.minus(event.params.tokens)
+  saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
@@ -165,15 +222,22 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
  * Emitted when a provision is slashed by the verifier.
  */
 export function handleProvisionSlashed(event: ProvisionSlashed): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let graphNetwork = getOrCreateGraphNetwork()
   let serviceProvider = getOrCreateServiceProvider(
     event.params.serviceProvider,
     event.block.number,
     event.block.timestamp
   )
+  let dataService = getOrCreateDataService(
+    verifierBytes,
+    event.block.number,
+    event.block.timestamp
+  )
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -183,6 +247,15 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   assert(provision.entity.tokens >= event.params.tokens, "Slash exceeds provision tokens")
   provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
   saveProvision(provision.entity, event.block)
+
+  // DataService
+  assert(!dataService.isNew, "Data service does not exist.")
+  assert(dataService.entity.tokensProvisioned >= event.params.tokens, "Slash exceeds data service tokens provisioned.")
+  dataService.entity.tokensProvisioned = dataService.entity.tokensProvisioned.minus(event.params.tokens)
+  dataService.entity.countProvisionSlashEvents += 1
+  dataService.entity.tokensSlashed = dataService.entity.tokensSlashed.plus(event.params.tokens)
+  dataService.entity.tokensSlashedFromProvisions = dataService.entity.tokensSlashedFromProvisions.plus(event.params.tokens)
+  saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
@@ -212,9 +285,11 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
  * Emitted when new provision parameters are staged (pending acceptance).
  */
 export function handleProvisionParametersStaged(event: ProvisionParametersStaged): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -231,9 +306,11 @@ export function handleProvisionParametersStaged(event: ProvisionParametersStaged
  * Emitted when staged provision parameters are accepted.
  */
 export function handleProvisionParametersSet(event: ProvisionParametersSet): void {
+  let verifierBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
+
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
-    event.params.verifier,
+    verifierBytes,
     event.block.number,
     event.block.timestamp
   )

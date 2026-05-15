@@ -8,6 +8,7 @@ import {
 } from "../../generated/HorizonStaking/HorizonStaking"
 import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
 import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
+import { getOrCreateDataService, saveDataService } from "../entities/dataService"
 import { getOrCreateDelegationPool, saveDelegationPool } from "../entities/delegationPool"
 import { BIGINT_ZERO } from "../common/constants"
 
@@ -34,6 +35,15 @@ export function handleTokensDelegated(event: TokensDelegated): void {
   pool.entity.tokens = pool.entity.tokens.plus(tokens)
   pool.entity.shares = pool.entity.shares.plus(shares)
   saveDelegationPool(pool.entity, event.block)
+
+  // Update DataService
+  let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(tokens)
+  if (pool.isNew) {
+    dataService.entity.countDelegationPools += 1
+  }
+  saveDataService(dataService.entity, event.block)
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
@@ -76,6 +86,12 @@ export function handleTokensUndelegated(event: TokensUndelegated): void {
   pool.entity.tokensThawing = pool.entity.tokensThawing.plus(tokens)
   saveDelegationPool(pool.entity, event.block)
 
+  // Update DataService
+  let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensThawingFromDelegationPools = dataService.entity.tokensThawingFromDelegationPools.plus(tokens)
+  saveDataService(dataService.entity, event.block)
+
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
   assert(!serviceProvider.isNew, "Service provider does not exist.")
@@ -113,6 +129,19 @@ export function handleDelegatedTokensWithdrawn(event: DelegatedTokensWithdrawn):
   assert(pool.entity.tokensThawing >= tokens, "Withdraw tokens exceed pool thawing tokens.")
   pool.entity.tokensThawing = pool.entity.tokensThawing.minus(tokens)
   saveDelegationPool(pool.entity, event.block)
+
+  // Update DataService
+  let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  assert(dataService.entity.tokensThawingFromDelegationPools >= tokens, "Withdraw tokens exceed data service tokens thawing.")
+  dataService.entity.tokensThawingFromDelegationPools = dataService.entity.tokensThawingFromDelegationPools.minus(tokens)
+  assert(dataService.entity.tokensDelegated >= tokens, "Withdraw tokens exceed data service tokens delegated.")
+  dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.minus(tokens)
+  if (pool.entity.tokens.equals(BIGINT_ZERO)) {
+    assert(dataService.entity.countDelegationPools > 0, "Data service delegation pool count is zero.")
+    dataService.entity.countDelegationPools -= 1
+  }
+  saveDataService(dataService.entity, event.block)
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
@@ -160,6 +189,16 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
   pool.entity.tokens = pool.entity.tokens.minus(tokens)
   saveDelegationPool(pool.entity, event.block)
 
+  // Update DataService
+  let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  assert(dataService.entity.tokensDelegated >= tokens, "Slash tokens exceed data service tokens delegated.")
+  dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.minus(tokens)
+  dataService.entity.countDelegationPoolSlashEvents += 1
+  dataService.entity.tokensSlashed = dataService.entity.tokensSlashed.plus(tokens)
+  dataService.entity.tokensSlashedFromDelegationPools = dataService.entity.tokensSlashedFromDelegationPools.plus(tokens)
+  saveDataService(dataService.entity, event.block)
+
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
   assert(!serviceProvider.isNew, "Service provider does not exist.")
@@ -202,6 +241,12 @@ export function handleTokensToDelegationPoolAdded(event: TokensToDelegationPoolA
   assert(!pool.isNew, "Delegation pool does not exist.")
   pool.entity.tokens = pool.entity.tokens.plus(tokens)
   saveDelegationPool(pool.entity, event.block)
+
+  // Update DataService
+  let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(tokens)
+  saveDataService(dataService.entity, event.block)
 
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(serviceProviderBytes, event.block.number, event.block.timestamp)
