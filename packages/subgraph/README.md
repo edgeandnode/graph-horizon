@@ -12,7 +12,7 @@ The Graph Horizon Network subgraph is an **aggregate state subgraph** that track
 
 Entities are updated in place as events occur. Data services and payment collectors are discovered dynamically via staking and escrow events, but are tracked generically without service-specific or collector-specific details.
 
-### What this subgraph is NOT
+## What this subgraph is NOT
 
 - **Not historical**: This subgraph does not track event-by-event history. Individual stake deposits, slashes, or delegation details are not recorded.
 
@@ -22,7 +22,7 @@ Entities are updated in place as events occur. Data services and payment collect
 
 - **Not delegator-level**: Individual Delegator and Delegation entities are not included. Only pool-level aggregates (DelegationPool) are tracked.
 
-### What data is indexed?
+## What data is indexed?
 
 This subgraph begins indexing at **Horizon genesis**, not protocol genesis. The Graph protocol existed before the Horizon upgrade, so pre-existing state that is relevant such as stake or delegations needs to be backfilled to have a correct view of the network state.
 
@@ -32,4 +32,9 @@ At the Horizon genesis block, a one-time migration seeds entities by reading cur
 
 - **Delegation pools**: Pool state (tokens, shares, tokensThawing) is read from the contract for all service providers with `delegated tokens > 0` at Graph Horizon genesis.
 
-**Important**: With this approach pre-Horizon history is "flattened" into these snapshots. Cumulative fields like `tokensStaked` include pre-Horizon values, but event-driven fields (e.g., query fees collected) only track activity from Horizon onwards.
+### Important caveats
+
+1. **Migrated data**: As described before, the migration strategy "flattens" pre-Horizon history into snapshots. Cumulative fields that represent current state include aggregated pre-Horizon values, but event-driven fields (e.g., query fees collected) only track activity from Horizon onwards. For example:
+    - `tokensStaked` includes stake deposits/thaws made before/after Horizon. This is expected. However it also aggregates all rewards and query fees that were direclty deposited into the service provider's stake before Horizon, that stake is also counted towards `tokensStaked` as it is the "starting stake" at Horizon genesis.
+    - `tokensCollected` tracks payments (indexing rewards and query fees) only after Horizon. Pre-horizon data for collections is not available in this subgraph.
+2. **Legacy allocations**: During Horizon's transition period legacy allocations were allowed to exist but forced to be eventually closed. To simplify the subgraph this is not being tracked. The consequence is that stake balances in the subgraph will be incorrect for service providers untill all their legacy allocations are closed down. For most service providers this is ~30 days after Horizon genesis (Dec 9th 2025).
