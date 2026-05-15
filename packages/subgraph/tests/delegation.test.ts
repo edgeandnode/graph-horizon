@@ -361,6 +361,57 @@ describe("DelegationSlashed", () => {
   })
 })
 
+describe("Service Provider counter behavior", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  test("does not decrement countServiceProviders when withdrawal leaves SP with stake", () => {
+    // Create SP with stake first
+    let stakeTokens = BigInt.fromString("5000000000000000000000")
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
+    handleHorizonStakeDeposited(depositEvent)
+
+    // Then add delegation
+    let delegatedTokens = BigInt.fromString("1000000000000000000000")
+    let shares = BigInt.fromString("1000000000000000000000")
+    let delegateEvent = createTokensDelegatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, DELEGATOR_ADDRESS, delegatedTokens, shares)
+    handleTokensDelegated(delegateEvent)
+
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
+
+    // Undelegate and withdraw all
+    let undelegateEvent = createTokensUndelegatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, DELEGATOR_ADDRESS, delegatedTokens, shares)
+    handleTokensUndelegated(undelegateEvent)
+
+    let withdrawEvent = createDelegatedTokensWithdrawnEvent(SP_ADDRESS, VERIFIER_ADDRESS, DELEGATOR_ADDRESS, delegatedTokens)
+    handleDelegatedTokensWithdrawn(withdrawEvent)
+
+    // Counter should NOT decrement because SP still has stake
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensStaked", stakeTokens.toString())
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensDelegated", "0")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
+  })
+
+  test("does not double count when delegation is added to existing staked SP", () => {
+    // Create SP with stake first
+    let stakeTokens = BigInt.fromString("5000000000000000000000")
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
+    handleHorizonStakeDeposited(depositEvent)
+
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
+
+    // Add delegation - should NOT increment count since SP already exists
+    let delegatedTokens = BigInt.fromString("1000000000000000000000")
+    let shares = BigInt.fromString("1000000000000000000000")
+    let delegateEvent = createTokensDelegatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, DELEGATOR_ADDRESS, delegatedTokens, shares)
+    handleTokensDelegated(delegateEvent)
+
+    // Counter should still be 1
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "1")
+  })
+})
+
 describe("Delegation lifecycle", () => {
   beforeEach(() => {
     clearStore()

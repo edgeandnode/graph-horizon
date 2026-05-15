@@ -50,6 +50,7 @@ export function handleHorizonStakeWithdrawn(event: HorizonStakeWithdrawn): void 
   )
 
   // ServiceProvider
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
   assert(serviceProvider.entity.tokensStaked >= event.params.tokens, "Withdraw exceeds staked tokens.")
   serviceProvider.entity.tokensStaked = serviceProvider.entity.tokensStaked.minus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
@@ -59,7 +60,9 @@ export function handleHorizonStakeWithdrawn(event: HorizonStakeWithdrawn): void 
   // GraphNetwork
   assert(graphNetwork.tokensStaked >= event.params.tokens, "Withdraw exceeds total staked.")
   graphNetwork.tokensStaked = graphNetwork.tokensStaked.minus(event.params.tokens)
-  if(serviceProvider.entity.tokensStaked.equals(BIGINT_ZERO)) {
+  // Decrement counter if SP becomes inactive (no stake)
+  if (serviceProvider.entity.tokensStaked.equals(BIGINT_ZERO)) {
+    assert(graphNetwork.countServiceProviders > 0, "Service provider count is zero.")
     graphNetwork.countServiceProviders -= 1
   }
   saveGraphNetwork(graphNetwork)

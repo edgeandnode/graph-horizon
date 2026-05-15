@@ -5,6 +5,7 @@ const GET_STAKE_SELECTOR = "0x7a766460" // getStake(address)
 const GET_SERVICE_PROVIDER_SELECTOR = "0x8cc01c86" // getServiceProvider(address)
 const GET_PROVISION_SELECTOR = "0x25d9897e" // getProvision(address,address)
 const GET_DELEGATION_POOL_SELECTOR = "0x561285e4" // getDelegationPool(address,address)
+const MULTICALL_SELECTOR = "0xac9650d8" // multicall(bytes[])
 
 export interface ServiceProviderData {
   tokensStaked: bigint
@@ -127,4 +128,128 @@ export async function getDelegationPool(serviceProvider: string, verifier: strin
     sharesThawing: BigInt("0x" + hex.slice(192, 256)),
     thawingNonce: BigInt("0x" + hex.slice(256, 320)),
   }
+}
+
+// ============================================================================
+// Multicall
+// ============================================================================
+
+// Encode call data helpers (for use with multicall)
+export function encodeGetServiceProvider(address: string): string {
+  return GET_SERVICE_PROVIDER_SELECTOR + padAddress(address)
+}
+
+export function encodeGetProvision(serviceProvider: string, verifier: string): string {
+  return GET_PROVISION_SELECTOR + padAddress(serviceProvider) + padAddress(verifier)
+}
+
+export function encodeGetDelegationPool(serviceProvider: string, verifier: string): string {
+  return GET_DELEGATION_POOL_SELECTOR + padAddress(serviceProvider) + padAddress(verifier)
+}
+
+// Decode result helpers
+export function decodeServiceProviderResult(hex: string): ServiceProviderData {
+  const data = hex.startsWith("0x") ? hex.slice(2) : hex
+  return {
+    tokensStaked: BigInt("0x" + data.slice(0, 64)),
+    tokensProvisioned: BigInt("0x" + data.slice(64, 128)),
+  }
+}
+
+export function decodeProvisionResult(hex: string): ProvisionData {
+  const data = hex.startsWith("0x") ? hex.slice(2) : hex
+  return {
+    tokens: BigInt("0x" + data.slice(0, 64)),
+    tokensThawing: BigInt("0x" + data.slice(64, 128)),
+    sharesThawing: BigInt("0x" + data.slice(128, 192)),
+    maxVerifierCut: BigInt("0x" + data.slice(192, 256)),
+    thawingPeriod: BigInt("0x" + data.slice(256, 320)),
+    createdAt: BigInt("0x" + data.slice(320, 384)),
+    maxVerifierCutPending: BigInt("0x" + data.slice(384, 448)),
+    thawingPeriodPending: BigInt("0x" + data.slice(448, 512)),
+    lastParametersStagedAt: BigInt("0x" + data.slice(512, 576)),
+    thawingNonce: BigInt("0x" + data.slice(576, 640)),
+  }
+}
+
+export function decodeDelegationPoolResult(hex: string): DelegationPoolData {
+  const data = hex.startsWith("0x") ? hex.slice(2) : hex
+  return {
+    tokens: BigInt("0x" + data.slice(0, 64)),
+    shares: BigInt("0x" + data.slice(64, 128)),
+    tokensThawing: BigInt("0x" + data.slice(128, 192)),
+    sharesThawing: BigInt("0x" + data.slice(192, 256)),
+    thawingNonce: BigInt("0x" + data.slice(256, 320)),
+  }
+}
+
+/**
+ * Executes multiple calls in a single RPC request using HorizonStaking's built-in multicall.
+ * @param calls Array of encoded call data (without 0x prefix is fine)
+ * @returns Array of result hex strings
+ */
+export async function multicall(calls: string[]): Promise<string[]> {
+  const config = getConfig()
+
+  // ABI encode bytes[] parameter
+  // - offset to array data (32 bytes): 0x20
+  // - array length (32 bytes)
+  // - offsets to each bytes element (32 bytes each)
+  // - each bytes element: length (32 bytes) + data (padded to 32 bytes)
+
+  const normalizedCalls = calls.map((c) => (c.startsWith("0x") ? c.slice(2) : c))
+
+  // Calculate offsets for each element
+  // Offsets are relative to the start of the array data (after the length)
+  const headerSize = normalizedCalls.length * 32 // space for all offset pointers
+  const offsets: number[] = []
+  let currentOffset = headerSize
+
+  for (const call of normalizedCalls) {
+    offsets.push(currentOffset)
+    const dataLen = call.length / 2 // bytes length
+    const paddedLen = Math.ceil(dataLen / 32) * 32
+    currentOffset += 32 + paddedLen // 32 for length + padded data
+  }
+
+  // Build the encoded data
+  let encoded = MULTICALL_SELECTOR.slice(2) // remove 0x
+  encoded += "0000000000000000000000000000000000000000000000000000000000000020" // offset to array = 32
+  encoded += normalizedCalls.length.toString(16).padStart(64, "0") // array length
+
+  // Add offsets
+  for (const offset of offsets) {
+    encoded += offset.toString(16).padStart(64, "0")
+  }
+
+  // Add each bytes element
+  for (const call of normalizedCalls) {
+    const dataLen = call.length / 2
+    encoded += dataLen.toString(16).padStart(64, "0") // length
+    const paddedLen = Math.ceil(dataLen / 32) * 32
+    encoded += call.padEnd(paddedLen * 2, "0") // data padded to 32-byte boundary
+  }
+
+  const result = await ethCall(config.stakingAddress, "0x" + encoded)
+
+  // Decode bytes[] result
+  // - offset to array data (32 bytes)
+  // - array length (32 bytes)
+  // - offsets to each bytes element
+  // - each bytes element: length + data
+  const resultHex = result.slice(2)
+  const resultLength = parseInt(resultHex.slice(64, 128), 16)
+
+  const results: string[] = []
+  for (let i = 0; i < resultLength; i++) {
+    const offsetPos = 128 + i * 64
+    const offset = parseInt(resultHex.slice(offsetPos, offsetPos + 64), 16) * 2
+    const lengthPos = 64 + offset // relative to after the initial offset
+    const length = parseInt(resultHex.slice(lengthPos, lengthPos + 64), 16)
+    const dataStart = lengthPos + 64
+    const data = resultHex.slice(dataStart, dataStart + length * 2)
+    results.push("0x" + data)
+  }
+
+  return results
 }

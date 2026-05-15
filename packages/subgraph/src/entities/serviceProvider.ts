@@ -22,10 +22,28 @@ export function getOrCreateServiceProvider(
 
   if (entity == null) {
     entity = new ServiceProvider(id)
+
+    // Counts
+    entity.countProvisions = 0
+    entity.countProvisionSlashEvents = 0
+    entity.countDelegationPoolSlashEvents = 0
+
+    // Stake
     entity.tokensStaked = BIGINT_ZERO
     entity.tokensProvisioned = BIGINT_ZERO
     entity.tokensIdle = BIGINT_ZERO
+    entity.tokensThawing = BIGINT_ZERO
+
+    // Delegation
     entity.tokensDelegated = BIGINT_ZERO
+    entity.tokensDelegatedThawing = BIGINT_ZERO
+
+    // Slashing
+    entity.tokensSlashed = BIGINT_ZERO
+    entity.tokensSlashedFromProvisions = BIGINT_ZERO
+    entity.tokensSlashedFromDelegationPools = BIGINT_ZERO
+
+    // Metadata
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber

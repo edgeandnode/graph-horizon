@@ -9,6 +9,10 @@ type GraphNetwork @entity(immutable: false) {
   countProvisions: Int!
   "Active delegation pools"
   countDelegationPools: Int!
+  "Provision slash events"
+  countProvisionSlashEvents: Int!
+  "Delegation pool slash events"
+  countDelegationPoolSlashEvents: Int!
 
   # Stake aggregates
   "Total tokens staked by service providers"
@@ -17,11 +21,31 @@ type GraphNetwork @entity(immutable: false) {
   tokensProvisioned: BigInt!
   "Total tokens delegated to service providers"
   tokensDelegated: BigInt!
+  "Total tokens currently thawing from provisions"
+  tokensThawingFromProvisions: BigInt!
+  "Total tokens currently thawing from delegation pools"
+  tokensThawingFromDelegationPools: BigInt!
+
+  # Slashing aggregates
+  "Total tokens slashed"
+  tokensSlashed: BigInt!
+  "Total tokens slashed from provisions"
+  tokensSlashedFromProvisions: BigInt!
+  "Total tokens slashed from delegation pools"
+  tokensSlashedFromDelegationPools: BigInt!
 }
 
 type ServiceProvider @entity(immutable: false) {
   "Service provider address"
   id: Bytes!
+
+  # Counts
+  "Number of active provisions"
+  countProvisions: Int!
+  "Provision slash events"
+  countProvisionSlashEvents: Int!
+  "Delegation pool slash events"
+  countDelegationPoolSlashEvents: Int!
 
   # Stake
   "Tokens staked by the service provider"
@@ -30,8 +54,22 @@ type ServiceProvider @entity(immutable: false) {
   tokensProvisioned: BigInt!
   "Tokens that are not locked in provisions"
   tokensIdle: BigInt!
+  "Tokens currently thawing from provisions"
+  tokensThawing: BigInt!
+
+  # Delegation
   "Tokens delegated to this service provider"
   tokensDelegated: BigInt!
+  "Tokens currently thawing from delegation pools"
+  tokensDelegatedThawing: BigInt!
+
+  # Slashing
+  "Total tokens slashed"
+  tokensSlashed: BigInt!
+  "Tokens slashed from provisions"
+  tokensSlashedFromProvisions: BigInt!
+  "Tokens slashed from delegation pools"
+  tokensSlashedFromDelegationPools: BigInt!
 
   # Provisions
   "Provisions created by this service provider"

@@ -1,0 +1,282 @@
+/**
+ * Validates internal consistency of subgraph data.
+ * Checks that aggregates match entity sums and counts match entity counts.
+ * This is fast (no RPC calls) and catches mapping bugs.
+ *
+ * Usage: pnpm validate:internal <subgraph-url>
+ */
+
+import {
+  querySubgraph,
+  formatGRT,
+  getSubgraphUrlFromArgs,
+  printHeader,
+  runValidation,
+  validateCount,
+  validateSum,
+} from "../common"
+
+// ============================================================================
+// Types
+// ============================================================================
+
+interface GraphNetwork {
+  id: string
+  countServiceProviders: number
+  countProvisions: number
+  countDelegationPools: number
+  tokensStaked: string
+  tokensProvisioned: string
+  tokensDelegated: string
+  tokensThawingFromProvisions: string
+  tokensThawingFromDelegationPools: string
+}
+
+interface ServiceProvider {
+  id: string
+  tokensStaked: string
+  tokensProvisioned: string
+  tokensDelegated: string
+  tokensThawing: string
+  tokensDelegatedThawing: string
+  tokensIdle: string
+}
+
+interface Provision {
+  id: string
+  serviceProvider: { id: string }
+  tokens: string
+  tokensThawing: string
+}
+
+interface DelegationPool {
+  id: string
+  serviceProvider: { id: string }
+  tokens: string
+  tokensThawing: string
+}
+
+// ============================================================================
+// Queries
+// ============================================================================
+
+const GRAPH_NETWORK_QUERY = `{
+  graphNetwork(id: "0x01000000") {
+    id
+    countServiceProviders
+    countProvisions
+    countDelegationPools
+    tokensStaked
+    tokensProvisioned
+    tokensDelegated
+    tokensThawingFromProvisions
+    tokensThawingFromDelegationPools
+  }
+}`
+
+const SERVICE_PROVIDERS_QUERY = `{
+  serviceProviders(first: 1000, orderBy: tokensStaked, orderDirection: desc) {
+    id
+    tokensStaked
+    tokensProvisioned
+    tokensDelegated
+    tokensThawing
+    tokensDelegatedThawing
+    tokensIdle
+  }
+}`
+
+const PROVISIONS_QUERY = `{
+  provisions(first: 1000) {
+    id
+    serviceProvider { id }
+    tokens
+    tokensThawing
+  }
+}`
+
+const DELEGATION_POOLS_QUERY = `{
+  delegationPools(first: 1000) {
+    id
+    serviceProvider { id }
+    tokens
+    tokensThawing
+  }
+}`
+
+// ============================================================================
+// Main
+// ============================================================================
+
+async function main(): Promise<number> {
+  const subgraphUrl = getSubgraphUrlFromArgs()
+  printHeader(subgraphUrl, false)
+
+  let warnings = 0
+
+  // Fetch all data
+  console.log("=== Fetching subgraph data ===")
+  const [networkData, spData, provisionData, poolData] = await Promise.all([
+    querySubgraph<{ graphNetwork: GraphNetwork }>(subgraphUrl, GRAPH_NETWORK_QUERY),
+    querySubgraph<{ serviceProviders: ServiceProvider[] }>(subgraphUrl, SERVICE_PROVIDERS_QUERY),
+    querySubgraph<{ provisions: Provision[] }>(subgraphUrl, PROVISIONS_QUERY),
+    querySubgraph<{ delegationPools: DelegationPool[] }>(subgraphUrl, DELEGATION_POOLS_QUERY),
+  ])
+
+  const graphNetwork = networkData.graphNetwork
+  if (!graphNetwork) {
+    console.error("GraphNetwork entity not found")
+    return 1
+  }
+
+  const serviceProviders = spData.serviceProviders
+  const provisions = provisionData.provisions
+  const pools = poolData.delegationPools
+
+  // Filter to only SPs with stake > 0 (matches countServiceProviders semantics)
+  const stakedSPs = serviceProviders.filter((sp) => BigInt(sp.tokensStaked) > 0n)
+
+  // Filter to only pools with tokens > 0 (matches countDelegationPools semantics)
+  const activePools = pools.filter((p) => BigInt(p.tokens) > 0n)
+
+  console.log(`  GraphNetwork: found`)
+  console.log(`  ServiceProviders: ${serviceProviders.length} total, ${stakedSPs.length} with stake`)
+  console.log(`  Provisions: ${provisions.length}`)
+  console.log(`  DelegationPools: ${pools.length} total, ${activePools.length} with tokens`)
+  console.log("")
+
+  // ============================================================================
+  // GraphNetwork Count Validations
+  // ============================================================================
+
+  console.log("=== GraphNetwork Count Validations ===")
+
+  if (!validateCount("ServiceProviders", stakedSPs.length, graphNetwork.countServiceProviders)) {
+    warnings++
+  }
+
+  if (!validateCount("Provisions", provisions.length, graphNetwork.countProvisions)) {
+    warnings++
+  }
+
+  if (!validateCount("DelegationPools", activePools.length, graphNetwork.countDelegationPools)) {
+    warnings++
+  }
+
+  if (warnings === 0) {
+    console.log("All counts match!")
+    console.log("")
+  }
+
+  // ============================================================================
+  // GraphNetwork Sum Validations
+  // ============================================================================
+
+  console.log("=== GraphNetwork Sum Validations ===")
+  const sumWarningsBefore = warnings
+
+  // tokensStaked: sum of SP.tokensStaked
+  if (!validateSum("tokensStaked", serviceProviders, "tokensStaked", BigInt(graphNetwork.tokensStaked))) {
+    warnings++
+  }
+
+  // tokensProvisioned: sum of Provision.tokens (not SP.tokensProvisioned, to catch SP aggregate drift)
+  if (!validateSum("tokensProvisioned", provisions, "tokens", BigInt(graphNetwork.tokensProvisioned))) {
+    warnings++
+  }
+
+  // tokensDelegated: sum of DelegationPool.tokens
+  if (!validateSum("tokensDelegated", pools, "tokens", BigInt(graphNetwork.tokensDelegated))) {
+    warnings++
+  }
+
+  // tokensThawingFromProvisions: sum of Provision.tokensThawing
+  if (!validateSum("tokensThawingFromProvisions", provisions, "tokensThawing", BigInt(graphNetwork.tokensThawingFromProvisions))) {
+    warnings++
+  }
+
+  // tokensThawingFromDelegationPools: sum of DelegationPool.tokensThawing
+  if (!validateSum("tokensThawingFromDelegationPools", pools, "tokensThawing", BigInt(graphNetwork.tokensThawingFromDelegationPools))) {
+    warnings++
+  }
+
+  if (warnings === sumWarningsBefore) {
+    console.log("All sums match!")
+    console.log("")
+  }
+
+  // ============================================================================
+  // ServiceProvider Aggregate Validations
+  // ============================================================================
+
+  console.log("=== ServiceProvider Aggregate Validations ===")
+  let spWarnings = 0
+
+  for (const sp of serviceProviders) {
+    const spProvisions = provisions.filter((p) => p.serviceProvider.id === sp.id)
+    const spPools = pools.filter((p) => p.serviceProvider.id === sp.id)
+
+    const issues: string[] = []
+
+    // tokensProvisioned should equal sum of provision tokens
+    const provisionedSum = spProvisions.reduce((sum, p) => sum + BigInt(p.tokens), 0n)
+    if (BigInt(sp.tokensProvisioned) !== provisionedSum) {
+      issues.push(`tokensProvisioned: SP=${formatGRT(BigInt(sp.tokensProvisioned))}, sum=${formatGRT(provisionedSum)}`)
+    }
+
+    // tokensThawing should equal sum of provision tokensThawing
+    const thawingSum = spProvisions.reduce((sum, p) => sum + BigInt(p.tokensThawing), 0n)
+    if (BigInt(sp.tokensThawing) !== thawingSum) {
+      issues.push(`tokensThawing: SP=${formatGRT(BigInt(sp.tokensThawing))}, sum=${formatGRT(thawingSum)}`)
+    }
+
+    // tokensDelegated should equal sum of pool tokens
+    const delegatedSum = spPools.reduce((sum, p) => sum + BigInt(p.tokens), 0n)
+    if (BigInt(sp.tokensDelegated) !== delegatedSum) {
+      issues.push(`tokensDelegated: SP=${formatGRT(BigInt(sp.tokensDelegated))}, sum=${formatGRT(delegatedSum)}`)
+    }
+
+    // tokensDelegatedThawing should equal sum of pool tokensThawing
+    const delegatedThawingSum = spPools.reduce((sum, p) => sum + BigInt(p.tokensThawing), 0n)
+    if (BigInt(sp.tokensDelegatedThawing) !== delegatedThawingSum) {
+      issues.push(`tokensDelegatedThawing: SP=${formatGRT(BigInt(sp.tokensDelegatedThawing))}, sum=${formatGRT(delegatedThawingSum)}`)
+    }
+
+    // tokensIdle should equal tokensStaked - tokensProvisioned
+    const expectedIdle = BigInt(sp.tokensStaked) - BigInt(sp.tokensProvisioned)
+    if (BigInt(sp.tokensIdle) !== expectedIdle) {
+      issues.push(`tokensIdle: SP=${formatGRT(BigInt(sp.tokensIdle))}, expected=${formatGRT(expectedIdle)}`)
+    }
+
+    if (issues.length > 0) {
+      spWarnings++
+      console.log(`WARNING: ${sp.id}`)
+      for (const issue of issues) {
+        console.log(`  ${issue}`)
+      }
+      console.log("")
+    }
+  }
+
+  if (spWarnings === 0) {
+    console.log("All ServiceProvider aggregates match!")
+    console.log("")
+  }
+
+  warnings += spWarnings
+
+  // ============================================================================
+  // Summary
+  // ============================================================================
+
+  console.log("=== Summary ===")
+  if (warnings === 0) {
+    console.log("All internal consistency checks passed!")
+  } else {
+    console.log(`Found ${warnings} warning(s)`)
+  }
+
+  return warnings > 0 ? 1 : 0
+}
+
+runValidation(main)

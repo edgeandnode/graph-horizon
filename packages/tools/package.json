@@ -6,9 +6,10 @@
   "scripts": {
     "seed:indexers": "tsx src/seed/indexers.ts",
     "seed:delegations": "tsx src/seed/delegations.ts",
-    "validate:stake": "tsx src/validation/stake.ts",
-    "validate:provisions": "tsx src/validation/provisions.ts",
-    "validate:delegations": "tsx src/validation/delegations.ts"
+    "validate:internal": "tsx src/validation/internal.ts",
+    "validate:onchain:service-providers": "tsx src/validation/onchain/service-providers.ts",
+    "validate:onchain:provisions": "tsx src/validation/onchain/provisions.ts",
+    "validate:onchain:delegations": "tsx src/validation/onchain/delegations.ts"
   },
   "devDependencies": {
     "@types/node": "22.15.18",
