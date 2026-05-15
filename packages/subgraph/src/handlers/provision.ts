@@ -39,6 +39,7 @@ export function handleProvisionCreated(event: ProvisionCreated): void {
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
+  serviceProvider.entity.countProvisions += 1
   serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.plus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
   serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
@@ -86,9 +87,15 @@ export function handleProvisionIncreased(event: ProvisionIncreased): void {
 
 /**
  * Emitted when tokens begin thawing from a provision.
- * Note: Thawing tokens are still considered "provisioned" .
+ * Note: Thawing tokens are still considered "provisioned".
  */
 export function handleProvisionThawed(event: ProvisionThawed): void {
+  let graphNetwork = getOrCreateGraphNetwork()
+  let serviceProvider = getOrCreateServiceProvider(
+    event.params.serviceProvider,
+    event.block.number,
+    event.block.timestamp
+  )
   let provision = getOrCreateProvision(
     event.params.serviceProvider,
     event.params.verifier,
@@ -102,6 +109,15 @@ export function handleProvisionThawed(event: ProvisionThawed): void {
   provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
   provision.entity.tokensThawing = provision.entity.tokensThawing.plus(event.params.tokens)
   saveProvision(provision.entity, event.block)
+
+  // ServiceProvider
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  serviceProvider.entity.tokensThawing = serviceProvider.entity.tokensThawing.plus(event.params.tokens)
+  saveServiceProvider(serviceProvider.entity, event.block)
+
+  // GraphNetwork
+  graphNetwork.tokensThawingFromProvisions = graphNetwork.tokensThawingFromProvisions.plus(event.params.tokens)
+  saveGraphNetwork(graphNetwork)
 }
 
 /**
@@ -129,6 +145,8 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
+  assert(serviceProvider.entity.tokensThawing >= event.params.tokens, "Deprovision exceeds service provider tokens thawing.")
+  serviceProvider.entity.tokensThawing = serviceProvider.entity.tokensThawing.minus(event.params.tokens)
   assert(serviceProvider.entity.tokensProvisioned >= event.params.tokens, "Deprovision exceeds service provider tokens provisioned.")
   serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.minus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
@@ -136,6 +154,8 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
+  assert(graphNetwork.tokensThawingFromProvisions >= event.params.tokens, "Deprovision exceeds network tokens thawing from provisions.")
+  graphNetwork.tokensThawingFromProvisions = graphNetwork.tokensThawingFromProvisions.minus(event.params.tokens)
   assert(graphNetwork.tokensProvisioned >= event.params.tokens, "Deprovision exceeds network tokens provisioned.")
   graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.minus(event.params.tokens)
   saveGraphNetwork(graphNetwork)
@@ -172,6 +192,9 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.minus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
   serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  serviceProvider.entity.countProvisionSlashEvents += 1
+  serviceProvider.entity.tokensSlashed = serviceProvider.entity.tokensSlashed.plus(event.params.tokens)
+  serviceProvider.entity.tokensSlashedFromProvisions = serviceProvider.entity.tokensSlashedFromProvisions.plus(event.params.tokens)
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
@@ -179,6 +202,9 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   assert(graphNetwork.tokensProvisioned >= event.params.tokens, "Slash exceeds network tokens provisioned.")
   graphNetwork.tokensStaked = graphNetwork.tokensStaked.minus(event.params.tokens)
   graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.minus(event.params.tokens)
+  graphNetwork.countProvisionSlashEvents += 1
+  graphNetwork.tokensSlashed = graphNetwork.tokensSlashed.plus(event.params.tokens)
+  graphNetwork.tokensSlashedFromProvisions = graphNetwork.tokensSlashedFromProvisions.plus(event.params.tokens)
   saveGraphNetwork(graphNetwork)
 }
 
