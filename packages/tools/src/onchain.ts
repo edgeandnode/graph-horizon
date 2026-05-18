@@ -6,6 +6,7 @@ const GET_SERVICE_PROVIDER_SELECTOR = "0x8cc01c86" // getServiceProvider(address
 const GET_PROVISION_SELECTOR = "0x25d9897e" // getProvision(address,address)
 const GET_DELEGATION_POOL_SELECTOR = "0x561285e4" // getDelegationPool(address,address)
 const GET_DELEGATION_FEE_CUT_SELECTOR = "0x7573ef4f" // getDelegationFeeCut(address,address,uint8)
+const IS_AUTHORIZED_SELECTOR = "0x7c145cc7" // isAuthorized(address,address,address)
 const MULTICALL_SELECTOR = "0xac9650d8" // multicall(bytes[])
 
 export interface ServiceProviderData {
@@ -142,6 +143,18 @@ export async function getDelegationFeeCut(
   const callData = GET_DELEGATION_FEE_CUT_SELECTOR + padAddress(serviceProvider) + padAddress(verifier) + paymentTypePadded
   const result = await ethCall(config.stakingAddress, callData)
   return BigInt(result)
+}
+
+export async function isAuthorized(
+  serviceProvider: string,
+  verifier: string,
+  operator: string
+): Promise<boolean> {
+  const config = getConfig()
+  const callData = IS_AUTHORIZED_SELECTOR + padAddress(serviceProvider) + padAddress(verifier) + padAddress(operator)
+  const result = await ethCall(config.stakingAddress, callData)
+  // Result is a boolean encoded as uint256 (0 or 1)
+  return BigInt(result) === 1n
 }
 
 // ============================================================================

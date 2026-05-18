@@ -8,10 +8,11 @@ import {
   createMockedFunction,
 } from "matchstick-as"
 import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
-import { migrateServiceProviders } from "../src/handlers/migration"
+import { migrateServiceProviders, migrateOperators } from "../src/handlers/migration"
 import { GRAPH_NETWORK_ID } from "../src/common/constants"
 import { testConfig, NetworkConfig } from "../src/config"
 import { encodeGetStake } from "../src/common/multicall"
+import { getOperatorAuthorizationId } from "../src/entities/operatorAuthorization"
 
 // Helper to create a mock block
 function createMockBlock(number: i32, timestamp: i32): ethereum.Block {
@@ -155,7 +156,9 @@ describe("migrateServiceProviders with empty config", () => {
       1,
       [], // empty service provider addresses
       [],  // empty delegated indexer addresses
-      []   // empty legacy indexer reward cuts
+      [],  // empty legacy indexer reward cuts
+      [],  // empty operator service providers
+      []   // empty operators
     )
 
     let block = createMockBlock(100, 1000)
@@ -168,5 +171,169 @@ describe("migrateServiceProviders with empty config", () => {
 
     // No ServiceProviders
     assert.entityCount("ServiceProvider", 0)
+  })
+})
+
+describe("migrateOperators", () => {
+  beforeEach(() => {
+    clearStore()
+  })
+
+  afterEach(() => {
+    clearStore()
+  })
+
+  test("creates Operator and OperatorAuthorization entities for each operator in config", () => {
+    // Create config with operator data
+    let operatorConfig = new NetworkConfig(
+      "test-operators",
+      testConfig.horizonStakingAddress,
+      testConfig.subgraphServiceAddress,
+      1,
+      [],
+      [],
+      [],
+      [
+        "0x1111111111111111111111111111111111111111",  // SP1
+        "0x1111111111111111111111111111111111111111",  // SP1 (has 2 operators)
+        "0x2222222222222222222222222222222222222222",  // SP2
+      ],
+      [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",  // Operator A for SP1
+        "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",  // Operator B for SP1
+        "0xcccccccccccccccccccccccccccccccccccccccc",  // Operator C for SP2
+      ]
+    )
+
+    let block = createMockBlock(100, 1000)
+    migrateOperators(block, operatorConfig)
+
+    // Should have 3 unique operators
+    assert.entityCount("Operator", 3)
+
+    // Should have 3 authorizations
+    assert.entityCount("OperatorAuthorization", 3)
+
+    // Verify Operator entities
+    let operatorA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    let operatorB = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    let operatorC = "0xcccccccccccccccccccccccccccccccccccccccc"
+
+    assert.fieldEquals("Operator", operatorA, "countAuthorizations", "1")
+    assert.fieldEquals("Operator", operatorB, "countAuthorizations", "1")
+    assert.fieldEquals("Operator", operatorC, "countAuthorizations", "1")
+
+    // Verify all authorizations are allowed
+    let sp1 = Bytes.fromHexString("0x1111111111111111111111111111111111111111")
+    let sp2 = Bytes.fromHexString("0x2222222222222222222222222222222222222222")
+    let verifier = Bytes.fromHexString(testConfig.subgraphServiceAddress.toHexString())
+
+    let authIdA = getOperatorAuthorizationId(
+      Bytes.fromHexString(operatorA),
+      sp1,
+      verifier
+    ).toHexString()
+    let authIdB = getOperatorAuthorizationId(
+      Bytes.fromHexString(operatorB),
+      sp1,
+      verifier
+    ).toHexString()
+    let authIdC = getOperatorAuthorizationId(
+      Bytes.fromHexString(operatorC),
+      sp2,
+      verifier
+    ).toHexString()
+
+    assert.fieldEquals("OperatorAuthorization", authIdA, "allowed", "true")
+    assert.fieldEquals("OperatorAuthorization", authIdB, "allowed", "true")
+    assert.fieldEquals("OperatorAuthorization", authIdC, "allowed", "true")
+  })
+
+  test("same operator authorized by multiple service providers", () => {
+    // Operator A is authorized by both SP1 and SP2
+    let operatorConfig = new NetworkConfig(
+      "test-shared-operator",
+      testConfig.horizonStakingAddress,
+      testConfig.subgraphServiceAddress,
+      1,
+      [],
+      [],
+      [],
+      [
+        "0x1111111111111111111111111111111111111111",  // SP1
+        "0x2222222222222222222222222222222222222222",  // SP2
+      ],
+      [
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",  // Same operator A
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",  // Same operator A
+      ]
+    )
+
+    let block = createMockBlock(100, 1000)
+    migrateOperators(block, operatorConfig)
+
+    // Should have only 1 unique operator
+    assert.entityCount("Operator", 1)
+
+    // Should have 2 authorizations (one per SP)
+    assert.entityCount("OperatorAuthorization", 2)
+
+    // Operator should have countAuthorizations = 2
+    let operatorA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    assert.fieldEquals("Operator", operatorA, "countAuthorizations", "2")
+  })
+
+  test("handles empty operator arrays gracefully", () => {
+    let emptyOperatorConfig = new NetworkConfig(
+      "test-no-operators",
+      testConfig.horizonStakingAddress,
+      testConfig.subgraphServiceAddress,
+      1,
+      [],
+      [],
+      [],
+      [],  // empty
+      []   // empty
+    )
+
+    let block = createMockBlock(100, 1000)
+    migrateOperators(block, emptyOperatorConfig)
+
+    assert.entityCount("Operator", 0)
+    assert.entityCount("OperatorAuthorization", 0)
+  })
+
+  test("sets correct block metadata on entities", () => {
+    let operatorConfig = new NetworkConfig(
+      "test-metadata",
+      testConfig.horizonStakingAddress,
+      testConfig.subgraphServiceAddress,
+      1,
+      [],
+      [],
+      [],
+      ["0x1111111111111111111111111111111111111111"],
+      ["0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
+    )
+
+    let block = createMockBlock(408825706, 1700000000)
+    migrateOperators(block, operatorConfig)
+
+    let operatorA = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    assert.fieldEquals("Operator", operatorA, "createdAtBlock", "408825706")
+    assert.fieldEquals("Operator", operatorA, "createdAt", "1700000000")
+    assert.fieldEquals("Operator", operatorA, "updatedAtBlock", "408825706")
+    assert.fieldEquals("Operator", operatorA, "updatedAt", "1700000000")
+
+    let sp = Bytes.fromHexString("0x1111111111111111111111111111111111111111")
+    let verifier = Bytes.fromHexString(testConfig.subgraphServiceAddress.toHexString())
+    let authId = getOperatorAuthorizationId(
+      Bytes.fromHexString(operatorA),
+      sp,
+      verifier
+    ).toHexString()
+
+    assert.fieldEquals("OperatorAuthorization", authId, "createdAtBlock", "408825706")
+    assert.fieldEquals("OperatorAuthorization", authId, "createdAt", "1700000000")
   })
 })

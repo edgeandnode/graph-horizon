@@ -15,6 +15,10 @@ export class NetworkConfig {
   // Parallel array with delegatedIndexerAddresses - same index = same indexer
   // Used to calculate delegation rewards from legacy indexing rewards
   legacyIndexerRewardCuts: i32[]
+  // Legacy operator authorizations at Horizon genesis
+  // Parallel arrays: operatorServiceProviders[i] authorized operators[i]
+  operatorServiceProviders: string[]
+  operators: string[]
 
   constructor(
     network: string,
@@ -23,7 +27,9 @@ export class NetworkConfig {
     startBlock: i32,
     serviceProviderAddresses: string[],
     delegatedIndexerAddresses: string[],
-    legacyIndexerRewardCuts: i32[]
+    legacyIndexerRewardCuts: i32[],
+    operatorServiceProviders: string[],
+    operators: string[]
   ) {
     this.network = network
     this.horizonStakingAddress = horizonStakingAddress
@@ -32,5 +38,7 @@ export class NetworkConfig {
     this.serviceProviderAddresses = serviceProviderAddresses
     this.delegatedIndexerAddresses = delegatedIndexerAddresses
     this.legacyIndexerRewardCuts = legacyIndexerRewardCuts
+    this.operatorServiceProviders = operatorServiceProviders
+    this.operators = operators
   }
 }

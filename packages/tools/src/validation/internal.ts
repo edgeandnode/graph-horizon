@@ -85,6 +85,19 @@ interface ProvisionFeeCut {
   feeCut: string
 }
 
+interface Operator {
+  id: string
+  countAuthorizations: number
+}
+
+interface OperatorAuthorization {
+  id: string
+  operator: { id: string }
+  serviceProvider: { id: string }
+  dataService: { id: string }
+  allowed: boolean
+}
+
 // ============================================================================
 // Queries
 // ============================================================================
@@ -168,6 +181,23 @@ const PROVISION_FEE_CUTS_QUERY = `{
   }
 }`
 
+const OPERATORS_QUERY = `{
+  operators(first: 1000) {
+    id
+    countAuthorizations
+  }
+}`
+
+const OPERATOR_AUTHORIZATIONS_QUERY = `{
+  operatorAuthorizations(first: 1000) {
+    id
+    operator { id }
+    serviceProvider { id }
+    dataService { id }
+    allowed
+  }
+}`
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -180,7 +210,7 @@ async function main(): Promise<number> {
 
   // Fetch all data
   console.log("=== Fetching subgraph data ===")
-  const [networkData, spData, dsData, provisionData, poolData, thawRequestData, feeCutData] = await Promise.all([
+  const [networkData, spData, dsData, provisionData, poolData, thawRequestData, feeCutData, operatorData, authorizationData] = await Promise.all([
     querySubgraph<{ graphNetwork: GraphNetwork }>(subgraphUrl, GRAPH_NETWORK_QUERY),
     querySubgraph<{ serviceProviders: ServiceProvider[] }>(subgraphUrl, SERVICE_PROVIDERS_QUERY),
     querySubgraph<{ dataServices: DataService[] }>(subgraphUrl, DATA_SERVICES_QUERY),
@@ -188,6 +218,8 @@ async function main(): Promise<number> {
     querySubgraph<{ delegationPools: DelegationPool[] }>(subgraphUrl, DELEGATION_POOLS_QUERY),
     querySubgraph<{ provisionThawRequests: ProvisionThawRequest[] }>(subgraphUrl, PROVISION_THAW_REQUESTS_QUERY),
     querySubgraph<{ provisionFeeCuts: ProvisionFeeCut[] }>(subgraphUrl, PROVISION_FEE_CUTS_QUERY),
+    querySubgraph<{ operators: Operator[] }>(subgraphUrl, OPERATORS_QUERY),
+    querySubgraph<{ operatorAuthorizations: OperatorAuthorization[] }>(subgraphUrl, OPERATOR_AUTHORIZATIONS_QUERY),
   ])
 
   const graphNetwork = networkData.graphNetwork
@@ -202,6 +234,8 @@ async function main(): Promise<number> {
   const pools = poolData.delegationPools
   const thawRequests = thawRequestData.provisionThawRequests
   const feeCuts = feeCutData.provisionFeeCuts
+  const operators = operatorData.operators
+  const authorizations = authorizationData.operatorAuthorizations
 
   // Filter to only SPs with stake > 0 (matches countServiceProviders semantics)
   const stakedSPs = serviceProviders.filter((sp) => BigInt(sp.tokensStaked) > 0n)
@@ -213,6 +247,10 @@ async function main(): Promise<number> {
   const pendingThawRequests = thawRequests.filter((t) => !t.fulfilled)
   const fulfilledThawRequests = thawRequests.filter((t) => t.fulfilled)
 
+  // Filter authorizations by status
+  const allowedAuthorizations = authorizations.filter((a) => a.allowed)
+  const revokedAuthorizations = authorizations.filter((a) => !a.allowed)
+
   console.log(`  GraphNetwork: found`)
   console.log(`  ServiceProviders: ${serviceProviders.length} total, ${stakedSPs.length} with stake`)
   console.log(`  DataServices: ${dataServices.length}`)
@@ -220,6 +258,8 @@ async function main(): Promise<number> {
   console.log(`  DelegationPools: ${pools.length} total, ${activePools.length} with tokens`)
   console.log(`  ProvisionThawRequests: ${thawRequests.length} total, ${pendingThawRequests.length} pending, ${fulfilledThawRequests.length} fulfilled`)
   console.log(`  ProvisionFeeCuts: ${feeCuts.length}`)
+  console.log(`  Operators: ${operators.length}`)
+  console.log(`  OperatorAuthorizations: ${authorizations.length} total, ${allowedAuthorizations.length} allowed, ${revokedAuthorizations.length} revoked`)
   console.log("")
 
   // ============================================================================
@@ -506,6 +546,76 @@ async function main(): Promise<number> {
   }
 
   warnings += fcWarnings
+
+  // ============================================================================
+  // Operator Count Validations
+  // ============================================================================
+
+  console.log("=== Operator Count Validations ===")
+  let opWarnings = 0
+
+  for (const operator of operators) {
+    // Count allowed authorizations for this operator
+    const operatorAuthorizations = authorizations.filter(
+      (a) => a.operator.id === operator.id && a.allowed
+    )
+
+    if (operator.countAuthorizations !== operatorAuthorizations.length) {
+      opWarnings++
+      console.log(`WARNING: ${operator.id}`)
+      console.log(`  countAuthorizations: Operator=${operator.countAuthorizations}, actual=${operatorAuthorizations.length}`)
+      console.log("")
+    }
+  }
+
+  if (opWarnings === 0) {
+    console.log("All Operator counts match!")
+    console.log("")
+  }
+
+  warnings += opWarnings
+
+  // ============================================================================
+  // OperatorAuthorization Referential Integrity
+  // ============================================================================
+
+  console.log("=== OperatorAuthorization Referential Integrity ===")
+  let oaWarnings = 0
+
+  // Build lookup sets
+  const operatorIds = new Set(operators.map((o) => o.id))
+
+  for (const auth of authorizations) {
+    const issues: string[] = []
+
+    if (!operatorIds.has(auth.operator.id)) {
+      issues.push(`references non-existent Operator: ${auth.operator.id}`)
+    }
+
+    if (!spIds.has(auth.serviceProvider.id)) {
+      issues.push(`references non-existent ServiceProvider: ${auth.serviceProvider.id}`)
+    }
+
+    if (!dsIds.has(auth.dataService.id)) {
+      issues.push(`references non-existent DataService: ${auth.dataService.id}`)
+    }
+
+    if (issues.length > 0) {
+      oaWarnings++
+      console.log(`WARNING: ${auth.id}`)
+      for (const issue of issues) {
+        console.log(`  ${issue}`)
+      }
+      console.log("")
+    }
+  }
+
+  if (oaWarnings === 0) {
+    console.log("All OperatorAuthorization references are valid!")
+    console.log("")
+  }
+
+  warnings += oaWarnings
 
   // ============================================================================
   // Summary

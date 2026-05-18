@@ -26,3 +26,4 @@ export {
   handleThawRequestFulfilled
 } from "./handlers/thawRequest"
 export { handleDelegationFeeCutSet } from "./handlers/feeCut"
+export { handleOperatorSet } from "./handlers/operator"

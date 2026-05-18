@@ -23,6 +23,8 @@ dataSources:
         - DelegationPool
         - ProvisionThawRequest
         - ProvisionFeeCut
+        - Operator
+        - OperatorAuthorization
       abis:
         - name: HorizonStaking
           file: ./abis/HorizonStaking.json
@@ -62,6 +64,9 @@ dataSources:
           handler: handleDelegationSlashed
         - event: DelegationFeeCutSet(indexed address,indexed address,indexed uint8,uint256)
           handler: handleDelegationFeeCutSet
+        # Operator events
+        - event: OperatorSet(indexed address,indexed address,indexed address,bool)
+          handler: handleOperatorSet
         # Thaw request events
         - event: ThawRequestCreated(indexed uint8,indexed address,indexed address,address,uint256,uint64,bytes32,uint256)
           handler: handleThawRequestCreated
