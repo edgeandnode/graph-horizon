@@ -189,6 +189,8 @@ type Provision @entity(immutable: false) {
   dataService: DataService!
   "Thaw requests for this provision"
   thawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "provision")
+  "Fee cuts for delegators by payment type"
+  feeCuts: [ProvisionFeeCut!]! @derivedFrom(field: "provision")
 
   # Tokens
   "Tokens currently provisioned"
@@ -215,6 +217,27 @@ type Provision @entity(immutable: false) {
   createdAtBlock: BigInt!
   "Timestamp when entity was created"
   createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type ProvisionFeeCut @entity(immutable: false) {
+  "Composite ID: provision-paymentType"
+  id: Bytes!
+
+  # Relationships
+  "Provision this fee cut belongs to"
+  provision: Provision!
+
+  # State
+  "Payment type (maps to PaymentTypes enum: 0 = QueryFee, 1 = IndexingFee, 2 = IndexingReward, ...)"
+  paymentType: Int!
+  "Fee cut percentage (PPM)"
+  feeCut: BigInt!
+
+  # Metadata
   "Block number when entity was last updated"
   updatedAtBlock: BigInt!
   "Timestamp when entity was last updated"

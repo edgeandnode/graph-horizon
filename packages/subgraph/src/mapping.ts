@@ -25,3 +25,4 @@ export {
   handleThawRequestCreated,
   handleThawRequestFulfilled
 } from "./handlers/thawRequest"
+export { handleDelegationFeeCutSet } from "./handlers/feeCut"
