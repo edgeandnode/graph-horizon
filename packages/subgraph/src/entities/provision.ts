@@ -1,9 +1,10 @@
 import { BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { Provision } from "../../generated/schema"
 import { BIGINT_ZERO } from "../common/constants"
+import { twoPartId } from "../common/ids"
 
 export function getProvisionId(serviceProvider: Bytes, dataService: Bytes): Bytes {
-  return serviceProvider.concat(dataService)
+  return twoPartId(serviceProvider, dataService)
 }
 
 export class ProvisionResult {

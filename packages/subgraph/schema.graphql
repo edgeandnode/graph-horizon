@@ -41,6 +41,14 @@ type ServiceProvider @entity(immutable: false) {
   "Service provider address"
   id: Bytes!
 
+  # Relationships
+  "Provisions created by this service provider"
+  provisions: [Provision!]! @derivedFrom(field: "serviceProvider")
+  "Delegation pools for this service provider"
+  delegationPools: [DelegationPool!]! @derivedFrom(field: "serviceProvider")
+  "Provision thaw requests for this service provider"
+  provisionThawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "serviceProvider")
+
   # Counts
   "Number of active provisions"
   countProvisions: Int!
@@ -73,14 +81,6 @@ type ServiceProvider @entity(immutable: false) {
   "Tokens slashed from delegation pools"
   tokensSlashedFromDelegationPools: BigInt!
 
-  # Provisions
-  "Provisions created by this service provider"
-  provisions: [Provision!]! @derivedFrom(field: "serviceProvider")
-
-  # Delegation pools
-  "Delegation pools for this service provider"
-  delegationPools: [DelegationPool!]! @derivedFrom(field: "serviceProvider")
-
   # Metadata
   "Block number when entity was created"
   createdAtBlock: BigInt!
@@ -101,6 +101,8 @@ type DataService @entity(immutable: false) {
   provisions: [Provision!]! @derivedFrom(field: "dataService")
   "Delegation pools for this data service"
   delegationPools: [DelegationPool!]! @derivedFrom(field: "dataService")
+  "Provision thaw requests for this data service"
+  provisionThawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "dataService")
 
   # Counts
   "Active service providers with provisions to this data service"
@@ -185,6 +187,8 @@ type Provision @entity(immutable: false) {
   serviceProvider: ServiceProvider!
   "Data service (verifier)"
   dataService: DataService!
+  "Thaw requests for this provision"
+  thawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "provision")
 
   # Tokens
   "Tokens currently provisioned"
@@ -205,6 +209,45 @@ type Provision @entity(immutable: false) {
   thawingPeriodPending: BigInt!
   "Timestamp when parameters were last staged"
   lastParametersStagedAt: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type ProvisionThawRequest @entity(immutable: false) {
+  "Thaw request ID (bytes32) emitted by ThawRequestCreated event"
+  id: Bytes!
+
+  # Relationships
+  "Provision being thawed"
+  provision: Provision!
+  "Service provider"
+  serviceProvider: ServiceProvider!
+  "Data service (verifier)"
+  dataService: DataService!
+
+  # State
+  "Shares being thawed"
+  shares: BigInt!
+  "Timestamp when thaw completes"
+  thawingUntil: BigInt!
+  "Thawing nonce at time of creation"
+  thawingNonce: BigInt!
+  "Tokens withdrawn (set on fulfillment, null while pending)"
+  tokensWithdrawn: BigInt
+
+  # Status
+  "False if invalidated by slashing"
+  valid: Boolean!
+  "True when tokens have been withdrawn"
+  fulfilled: Boolean!
 
   # Metadata
   "Block number when entity was created"

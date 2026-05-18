@@ -70,6 +70,14 @@ interface DelegationPool {
   tokensThawing: string
 }
 
+interface ProvisionThawRequest {
+  id: string
+  provision: { id: string }
+  serviceProvider: { id: string }
+  dataService: { id: string }
+  fulfilled: boolean
+}
+
 // ============================================================================
 // Queries
 // ============================================================================
@@ -134,6 +142,16 @@ const DELEGATION_POOLS_QUERY = `{
   }
 }`
 
+const PROVISION_THAW_REQUESTS_QUERY = `{
+  provisionThawRequests(first: 1000) {
+    id
+    provision { id }
+    serviceProvider { id }
+    dataService { id }
+    fulfilled
+  }
+}`
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -146,12 +164,13 @@ async function main(): Promise<number> {
 
   // Fetch all data
   console.log("=== Fetching subgraph data ===")
-  const [networkData, spData, dsData, provisionData, poolData] = await Promise.all([
+  const [networkData, spData, dsData, provisionData, poolData, thawRequestData] = await Promise.all([
     querySubgraph<{ graphNetwork: GraphNetwork }>(subgraphUrl, GRAPH_NETWORK_QUERY),
     querySubgraph<{ serviceProviders: ServiceProvider[] }>(subgraphUrl, SERVICE_PROVIDERS_QUERY),
     querySubgraph<{ dataServices: DataService[] }>(subgraphUrl, DATA_SERVICES_QUERY),
     querySubgraph<{ provisions: Provision[] }>(subgraphUrl, PROVISIONS_QUERY),
     querySubgraph<{ delegationPools: DelegationPool[] }>(subgraphUrl, DELEGATION_POOLS_QUERY),
+    querySubgraph<{ provisionThawRequests: ProvisionThawRequest[] }>(subgraphUrl, PROVISION_THAW_REQUESTS_QUERY),
   ])
 
   const graphNetwork = networkData.graphNetwork
@@ -164,6 +183,7 @@ async function main(): Promise<number> {
   const dataServices = dsData.dataServices
   const provisions = provisionData.provisions
   const pools = poolData.delegationPools
+  const thawRequests = thawRequestData.provisionThawRequests
 
   // Filter to only SPs with stake > 0 (matches countServiceProviders semantics)
   const stakedSPs = serviceProviders.filter((sp) => BigInt(sp.tokensStaked) > 0n)
@@ -171,11 +191,16 @@ async function main(): Promise<number> {
   // Filter to only pools with tokens > 0 (matches countDelegationPools semantics)
   const activePools = pools.filter((p) => BigInt(p.tokens) > 0n)
 
+  // Filter thaw requests by status
+  const pendingThawRequests = thawRequests.filter((t) => !t.fulfilled)
+  const fulfilledThawRequests = thawRequests.filter((t) => t.fulfilled)
+
   console.log(`  GraphNetwork: found`)
   console.log(`  ServiceProviders: ${serviceProviders.length} total, ${stakedSPs.length} with stake`)
   console.log(`  DataServices: ${dataServices.length}`)
   console.log(`  Provisions: ${provisions.length}`)
   console.log(`  DelegationPools: ${pools.length} total, ${activePools.length} with tokens`)
+  console.log(`  ProvisionThawRequests: ${thawRequests.length} total, ${pendingThawRequests.length} pending, ${fulfilledThawRequests.length} fulfilled`)
   console.log("")
 
   // ============================================================================
@@ -374,6 +399,50 @@ async function main(): Promise<number> {
   }
 
   warnings += dsWarnings
+
+  // ============================================================================
+  // ProvisionThawRequest Referential Integrity
+  // ============================================================================
+
+  console.log("=== ProvisionThawRequest Referential Integrity ===")
+  let trWarnings = 0
+
+  // Build lookup sets for fast existence checks
+  const provisionIds = new Set(provisions.map((p) => p.id))
+  const spIds = new Set(serviceProviders.map((sp) => sp.id))
+  const dsIds = new Set(dataServices.map((ds) => ds.id))
+
+  for (const tr of thawRequests) {
+    const issues: string[] = []
+
+    if (!provisionIds.has(tr.provision.id)) {
+      issues.push(`references non-existent Provision: ${tr.provision.id}`)
+    }
+
+    if (!spIds.has(tr.serviceProvider.id)) {
+      issues.push(`references non-existent ServiceProvider: ${tr.serviceProvider.id}`)
+    }
+
+    if (!dsIds.has(tr.dataService.id)) {
+      issues.push(`references non-existent DataService: ${tr.dataService.id}`)
+    }
+
+    if (issues.length > 0) {
+      trWarnings++
+      console.log(`WARNING: ${tr.id}`)
+      for (const issue of issues) {
+        console.log(`  ${issue}`)
+      }
+      console.log("")
+    }
+  }
+
+  if (trWarnings === 0) {
+    console.log("All ProvisionThawRequest references are valid!")
+    console.log("")
+  }
+
+  warnings += trWarnings
 
   // ============================================================================
   // Summary

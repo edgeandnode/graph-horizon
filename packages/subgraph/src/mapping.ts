@@ -21,3 +21,7 @@ export {
   handleRebateCollected,
   handleAllocationClosed
 } from "./handlers/legacy"
+export {
+  handleThawRequestCreated,
+  handleThawRequestFulfilled
+} from "./handlers/thawRequest"

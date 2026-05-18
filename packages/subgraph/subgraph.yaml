@@ -18,10 +18,10 @@ dataSources:
       entities:
         - GraphNetwork
         - ServiceProvider
+        - DataService
         - Provision
         - DelegationPool
-        - Delegator
-        - Delegation
+        - ProvisionThawRequest
       abis:
         - name: HorizonStaking
           file: ./abis/HorizonStaking.json
@@ -59,6 +59,11 @@ dataSources:
           handler: handleDelegatedTokensWithdrawn
         - event: DelegationSlashed(indexed address,indexed address,uint256)
           handler: handleDelegationSlashed
+        # Thaw request events
+        - event: ThawRequestCreated(indexed uint8,indexed address,indexed address,address,uint256,uint64,bytes32,uint256)
+          handler: handleThawRequestCreated
+        - event: ThawRequestFulfilled(indexed uint8,indexed bytes32,uint256,uint256,uint64,bool)
+          handler: handleThawRequestFulfilled
         # Legacy delegation reward events (HorizonStakingExtension)
         - event: RebateCollected(address,indexed address,indexed bytes32,indexed address,uint256,uint256,uint256,uint256,uint256,uint256,uint256)
           handler: handleRebateCollected
