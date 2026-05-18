@@ -10,7 +10,8 @@ import { Address, BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { HorizonStakeDeposited, HorizonStakeWithdrawn, TokensDelegated } from "../generated/HorizonStaking/HorizonStaking"
 import { handleHorizonStakeDeposited, handleHorizonStakeWithdrawn } from "../src/handlers/staking"
 import { handleTokensDelegated } from "../src/handlers/delegation"
-import { GRAPH_NETWORK_ID } from "../src/common/constants"
+import { GRAPH_NETWORK_ID, BIGINT_ZERO } from "../src/common/constants"
+import { DataService, GraphNetwork } from "../generated/schema"
 
 // Test addresses
 const SP_ADDRESS = Address.fromString("0x1234567890123456789012345678901234567890")
@@ -59,6 +60,36 @@ function createTokensDelegatedEvent(
   event.block.number = BigInt.fromI32(150)
   event.block.timestamp = BigInt.fromI32(1500)
   return event
+}
+
+// Helper to set up DataService entity (normally created via ProvisionCreated)
+function setupDataService(verifier: Address): void {
+  let id = Bytes.fromHexString(verifier.toHexString())
+  let ds = new DataService(id)
+  ds.countServiceProviders = 0
+  ds.countProvisions = 0
+  ds.countDelegationPools = 0
+  ds.countProvisionSlashEvents = 0
+  ds.countDelegationPoolSlashEvents = 0
+  ds.tokensProvisioned = BIGINT_ZERO
+  ds.tokensDelegated = BIGINT_ZERO
+  ds.tokensThawingFromProvisions = BIGINT_ZERO
+  ds.tokensThawingFromDelegationPools = BIGINT_ZERO
+  ds.tokensSlashed = BIGINT_ZERO
+  ds.tokensSlashedFromProvisions = BIGINT_ZERO
+  ds.tokensSlashedFromDelegationPools = BIGINT_ZERO
+  ds.createdAtBlock = BigInt.fromI32(1)
+  ds.createdAt = BigInt.fromI32(100)
+  ds.updatedAtBlock = BigInt.fromI32(1)
+  ds.updatedAt = BigInt.fromI32(100)
+  ds.save()
+
+  // Update GraphNetwork countDataServices
+  let graphNetwork = GraphNetwork.load(GRAPH_NETWORK_ID)
+  if (graphNetwork != null) {
+    graphNetwork.countDataServices += 1
+    graphNetwork.save()
+  }
 }
 
 describe("HorizonStakeDeposited", () => {
@@ -192,6 +223,7 @@ describe("HorizonStakeWithdrawn", () => {
     // First deposit stake
     let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stake)
     handleHorizonStakeDeposited(depositEvent)
+    setupDataService(VERIFIER_ADDRESS)
 
     // Then receive delegation
     let delegatedTokens = BigInt.fromString("500000000000000000000") // 500 GRT

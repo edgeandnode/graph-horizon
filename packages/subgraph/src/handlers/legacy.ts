@@ -5,6 +5,7 @@ import {
 } from "../../generated/HorizonStaking/HorizonStaking"
 import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetwork"
 import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
+import { getOrCreateDataService, saveDataService } from "../entities/dataService"
 import { getOrCreateDelegationPool, saveDelegationPool } from "../entities/delegationPool"
 import { config } from "../config"
 
@@ -33,12 +34,12 @@ export function handleRebateCollected(event: RebateCollected): void {
   }
 
   let indexerBytes = Bytes.fromHexString(indexer.toHexString()) as Bytes
-  let verifier = Bytes.fromHexString(config.subgraphServiceAddress.toHexString()) as Bytes
+  let dataServiceBytes = Bytes.fromHexString(config.subgraphServiceAddress.toHexString()) as Bytes
 
   // Update legacy DelegationPool
   let pool = getOrCreateDelegationPool(
     indexerBytes,
-    verifier,
+    dataServiceBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -49,11 +50,15 @@ export function handleRebateCollected(event: RebateCollected): void {
   pool.entity.tokens = pool.entity.tokens.plus(delegationRewards)
   saveDelegationPool(pool.entity, event.block)
 
+  // Update DataService
+  let dataService = getOrCreateDataService(dataServiceBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(delegationRewards)
+  saveDataService(dataService.entity, event.block)
+
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(indexerBytes, event.block.number, event.block.timestamp)
-  if (serviceProvider.isNew) {
-    return
-  }
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
   serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(delegationRewards)
   saveServiceProvider(serviceProvider.entity, event.block)
 
@@ -115,12 +120,12 @@ export function handleAllocationClosed(event: AllocationClosed): void {
     return
   }
 
-  let verifier = Bytes.fromHexString(config.subgraphServiceAddress.toHexString()) as Bytes
+  let dataServiceBytes = Bytes.fromHexString(config.subgraphServiceAddress.toHexString()) as Bytes
 
   // Get the legacy DelegationPool to read the indexer's reward cut
   let pool = getOrCreateDelegationPool(
     indexerBytes,
-    verifier,
+    dataServiceBytes,
     event.block.number,
     event.block.timestamp
   )
@@ -144,12 +149,17 @@ export function handleAllocationClosed(event: AllocationClosed): void {
   pool.entity.tokens = pool.entity.tokens.plus(delegationRewards)
   saveDelegationPool(pool.entity, event.block)
 
+  // Update DataService
+  let dataService = getOrCreateDataService(dataServiceBytes, event.block.number, event.block.timestamp)
+  assert(!dataService.isNew, "Data service does not exist.")
+  dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(delegationRewards)
+  saveDataService(dataService.entity, event.block)
+
   // Update ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(indexerBytes, event.block.number, event.block.timestamp)
-  if (!serviceProvider.isNew) {
-    serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(delegationRewards)
-    saveServiceProvider(serviceProvider.entity, event.block)
-  }
+  assert(!serviceProvider.isNew, "Service provider does not exist.")
+  serviceProvider.entity.tokensDelegated = serviceProvider.entity.tokensDelegated.plus(delegationRewards)
+  saveServiceProvider(serviceProvider.entity, event.block)
 
   // Update GraphNetwork
   let graphNetwork = getOrCreateGraphNetwork()

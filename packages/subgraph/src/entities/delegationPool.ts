@@ -2,8 +2,8 @@ import { BigInt, Bytes, ethereum } from "@graphprotocol/graph-ts"
 import { DelegationPool } from "../../generated/schema"
 import { BIGINT_ZERO } from "../common/constants"
 
-export function getDelegationPoolId(serviceProvider: Bytes, verifier: Bytes): Bytes {
-  return serviceProvider.concat(verifier)
+export function getDelegationPoolId(serviceProvider: Bytes, dataService: Bytes): Bytes {
+  return serviceProvider.concat(dataService)
 }
 
 export class DelegationPoolResult {
@@ -23,18 +23,18 @@ export class DelegationPoolResult {
  */
 export function getOrCreateDelegationPool(
   serviceProvider: Bytes,
-  verifier: Bytes,
+  dataService: Bytes,
   blockNumber: BigInt,
   timestamp: BigInt
 ): DelegationPoolResult {
-  let id = getDelegationPoolId(serviceProvider, verifier)
+  let id = getDelegationPoolId(serviceProvider, dataService)
   let entity = DelegationPool.load(id)
   let isNew = entity == null
 
   if (entity == null) {
     entity = new DelegationPool(id)
     entity.serviceProvider = serviceProvider
-    entity.verifier = verifier
+    entity.dataService = dataService
     entity.tokens = BIGINT_ZERO
     entity.shares = BIGINT_ZERO
     entity.tokensThawing = BIGINT_ZERO

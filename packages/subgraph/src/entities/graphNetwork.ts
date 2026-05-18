@@ -8,6 +8,7 @@ export function getOrCreateGraphNetwork(): GraphNetwork {
 
     // Counts
     entity.countServiceProviders = 0
+    entity.countDataServices = 0
     entity.countProvisions = 0
     entity.countDelegationPools = 0
     entity.countProvisionSlashEvents = 0

@@ -35,13 +35,13 @@ interface ServiceProvider {
 interface Provision {
   id: string
   serviceProvider: { id: string }
-  verifier: string
+  dataService: { id: string }
 }
 
 interface DelegationPool {
   id: string
   serviceProvider: { id: string }
-  verifier: string
+  dataService: { id: string }
 }
 
 async function main(): Promise<number> {
@@ -64,11 +64,11 @@ async function main(): Promise<number> {
     ),
     querySubgraph<{ provisions: Provision[] }>(
       subgraphUrl,
-      `{ provisions(first: 1000) { id serviceProvider { id } verifier } }`
+      `{ provisions(first: 1000) { id serviceProvider { id } dataService { id } } }`
     ),
     querySubgraph<{ delegationPools: DelegationPool[] }>(
       subgraphUrl,
-      `{ delegationPools(first: 1000) { id serviceProvider { id } verifier } }`
+      `{ delegationPools(first: 1000) { id serviceProvider { id } dataService { id } } }`
     ),
   ])
 
@@ -113,10 +113,10 @@ async function main(): Promise<number> {
     // Build multicall batch: 1 SP call + N provision calls + M pool calls
     const calls: string[] = [encodeGetServiceProvider(sp.id)]
     for (const provision of spProvisions) {
-      calls.push(encodeGetProvision(sp.id, provision.verifier))
+      calls.push(encodeGetProvision(sp.id, provision.dataService.id))
     }
     for (const pool of spPools) {
-      calls.push(encodeGetDelegationPool(sp.id, pool.verifier))
+      calls.push(encodeGetDelegationPool(sp.id, pool.dataService.id))
     }
 
     // Execute single multicall for this SP

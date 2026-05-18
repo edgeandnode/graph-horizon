@@ -5,6 +5,8 @@ type GraphNetwork @entity(immutable: false) {
   # Counts
   "Active service providers"
   countServiceProviders: Int!
+  "Active data services (verifiers)"
+  countDataServices: Int!
   "Active provisions"
   countProvisions: Int!
   "Active delegation pools"
@@ -90,15 +92,66 @@ type ServiceProvider @entity(immutable: false) {
   updatedAt: BigInt!
 }
 
+type DataService @entity(immutable: false) {
+  "Data service (verifier) contract address"
+  id: Bytes!
+
+  # Relationships
+  "Provisions for this data service"
+  provisions: [Provision!]! @derivedFrom(field: "dataService")
+  "Delegation pools for this data service"
+  delegationPools: [DelegationPool!]! @derivedFrom(field: "dataService")
+
+  # Counts
+  "Active service providers with provisions to this data service"
+  countServiceProviders: Int!
+  "Active provisions"
+  countProvisions: Int!
+  "Active delegation pools"
+  countDelegationPools: Int!
+  "Provision slash events"
+  countProvisionSlashEvents: Int!
+  "Delegation pool slash events"
+  countDelegationPoolSlashEvents: Int!
+
+  # Tokens
+  "Total tokens provisioned to this data service"
+  tokensProvisioned: BigInt!
+  "Total tokens delegated to service providers for this data service"
+  tokensDelegated: BigInt!
+  "Tokens currently thawing from provisions"
+  tokensThawingFromProvisions: BigInt!
+  "Tokens currently thawing from delegation pools"
+  tokensThawingFromDelegationPools: BigInt!
+
+  # Slashing
+  "Total tokens slashed"
+  tokensSlashed: BigInt!
+  "Tokens slashed from provisions"
+  tokensSlashedFromProvisions: BigInt!
+  "Tokens slashed from delegation pools"
+  tokensSlashedFromDelegationPools: BigInt!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
 type DelegationPool @entity(immutable: false) {
-  "Composite ID: serviceProvider-verifier"
+  "Composite ID: serviceProvider-dataService"
   id: Bytes!
 
   # Relationships
   "Service provider that owns this pool"
   serviceProvider: ServiceProvider!
-  "Verifier address (data service)"
-  verifier: Bytes!
+  "Data service (verifier)"
+  dataService: DataService!
 
   # Pool state
   "Total tokens in the pool"
@@ -124,14 +177,14 @@ type DelegationPool @entity(immutable: false) {
 }
 
 type Provision @entity(immutable: false) {
-  "Composite ID: serviceProvider-verifier"
+  "Composite ID: serviceProvider-dataService"
   id: Bytes!
 
   # Relationships
   "Service provider that created this provision"
   serviceProvider: ServiceProvider!
-  "Verifier address (data service)"
-  verifier: Bytes!
+  "Data service (verifier)"
+  dataService: DataService!
 
   # Tokens
   "Tokens currently provisioned"
