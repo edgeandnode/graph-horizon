@@ -123,10 +123,33 @@ describe("DelegationFeeCutSet", () => {
 
     assert.entityCount("ProvisionFeeCut", 1)
     assert.fieldEquals("ProvisionFeeCut", entityId, "provision", provisionId)
+    assert.fieldEquals("ProvisionFeeCut", entityId, "serviceProvider", SP_ADDRESS.toHexString())
+    assert.fieldEquals("ProvisionFeeCut", entityId, "dataService", VERIFIER_ADDRESS.toHexString())
     assert.fieldEquals("ProvisionFeeCut", entityId, "paymentType", PAYMENT_TYPE_QUERY_FEE.toString())
     assert.fieldEquals("ProvisionFeeCut", entityId, "feeCut", feeCut.toString())
     assert.fieldEquals("ProvisionFeeCut", entityId, "updatedAtBlock", "300")
     assert.fieldEquals("ProvisionFeeCut", entityId, "updatedAt", "3000")
+  })
+
+  test("creates ProvisionFeeCut without existing provision", () => {
+    // Set fee cut WITHOUT creating provision first
+    let feeCut = BigInt.fromI32(100000) // 10% in PPM
+    let event = createDelegationFeeCutSetEvent(
+      SP_ADDRESS,
+      VERIFIER_ADDRESS,
+      PAYMENT_TYPE_QUERY_FEE,
+      feeCut
+    )
+    handleDelegationFeeCutSet(event)
+
+    let entityId = getFeeCutIdString(SP_ADDRESS, VERIFIER_ADDRESS, PAYMENT_TYPE_QUERY_FEE)
+
+    // Entity should exist with serviceProvider and dataService set
+    assert.entityCount("ProvisionFeeCut", 1)
+    assert.fieldEquals("ProvisionFeeCut", entityId, "serviceProvider", SP_ADDRESS.toHexString())
+    assert.fieldEquals("ProvisionFeeCut", entityId, "dataService", VERIFIER_ADDRESS.toHexString())
+    assert.fieldEquals("ProvisionFeeCut", entityId, "paymentType", PAYMENT_TYPE_QUERY_FEE.toString())
+    assert.fieldEquals("ProvisionFeeCut", entityId, "feeCut", feeCut.toString())
   })
 
   test("creates separate entities for different payment types", () => {

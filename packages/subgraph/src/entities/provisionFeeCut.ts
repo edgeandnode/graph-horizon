@@ -31,6 +31,8 @@ export function getOrCreateProvisionFeeCut(
 
   if (entity == null) {
     entity = new ProvisionFeeCut(id)
+    entity.serviceProvider = serviceProvider
+    entity.dataService = dataService
     entity.provision = getProvisionId(serviceProvider, dataService)
     entity.paymentType = paymentType
     entity.feeCut = BIGINT_ZERO

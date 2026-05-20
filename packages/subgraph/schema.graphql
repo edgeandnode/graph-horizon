@@ -228,12 +228,16 @@ type Provision @entity(immutable: false) {
 }
 
 type ProvisionFeeCut @entity(immutable: false) {
-  "Composite ID: provision-paymentType"
+  "Composite ID: serviceProvider-dataService-paymentType"
   id: Bytes!
 
   # Relationships
   "Provision this fee cut belongs to"
-  provision: Provision!
+  provision: Provision
+  "Service provider"
+  serviceProvider: ServiceProvider
+  "Data service"
+  dataService: DataService
 
   # State
   "Payment type (maps to PaymentTypes enum: 0 = QueryFee, 1 = IndexingFee, 2 = IndexingReward, ...)"
@@ -318,9 +322,9 @@ type OperatorAuthorization @entity(immutable: false) {
   "Operator that is authorized"
   operator: Operator!
   "Service provider that granted the authorization"
-  serviceProvider: ServiceProvider!
+  serviceProvider: ServiceProvider
   "Data service this authorization applies to"
-  dataService: DataService!
+  dataService: DataService
 
   # State
   "Whether the operator is currently authorized"

@@ -18,8 +18,8 @@ import {
 interface OperatorAuthorization {
   id: string
   operator: { id: string }
-  serviceProvider: { id: string }
-  dataService: { id: string }
+  serviceProvider: { id: string } | null
+  dataService: { id: string } | null
   allowed: boolean
 }
 
@@ -53,7 +53,14 @@ async function main(): Promise<number> {
   let mismatches = 0
   let matches = 0
 
+  let skipped = 0
   for (const auth of authorizations) {
+    // Skip if serviceProvider or dataService entity doesn't exist yet
+    if (!auth.serviceProvider || !auth.dataService) {
+      skipped++
+      continue
+    }
+
     const onChainAllowed = await isAuthorized(
       auth.serviceProvider.id,
       auth.dataService.id,
@@ -73,6 +80,11 @@ async function main(): Promise<number> {
     }
 
     await delay()
+  }
+
+  if (skipped > 0) {
+    console.log(`  Skipped ${skipped} authorizations (serviceProvider or dataService entity doesn't exist)`)
+    console.log("")
   }
 
   // Summary
