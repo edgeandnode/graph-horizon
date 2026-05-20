@@ -4,6 +4,11 @@ import { getOrCreateGraphNetwork, saveGraphNetwork } from "../entities/graphNetw
 import { getOrCreateServiceProvider, saveServiceProvider } from "../entities/serviceProvider"
 import { getOrCreateDataService, saveDataService } from "../entities/dataService"
 import { getOrCreateDelegationPool, saveDelegationPool } from "../entities/delegationPool"
+import { getOrCreateOperator, saveOperator } from "../entities/operator"
+import {
+  getOrCreateOperatorAuthorization,
+  saveOperatorAuthorization,
+} from "../entities/operatorAuthorization"
 import { config } from "../config"
 import { NetworkConfig } from "../config/types"
 import {
@@ -34,6 +39,7 @@ const MULTICALL_BATCH_SIZE = 100
 export function handleHorizonGenesisBlock(block: ethereum.Block): void {
   migrateServiceProviders(block, config)
   migrateDelegationPools(block, config)
+  migrateOperators(block, config)
 }
 
 /**
@@ -185,4 +191,58 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
 
   saveDataService(dataService.entity, block)
   saveGraphNetwork(graphNetwork)
+}
+
+/**
+ * Seeds Operator and OperatorAuthorization entities for legacy operators.
+ *
+ * Before Horizon, operators were global (not per-verifier). After Horizon,
+ * these legacy operators are considered authorized for the Subgraph Service.
+ * This function creates the necessary entities from a seed list generated
+ * by querying the legacy network subgraph at Horizon genesis block.
+ *
+ * Uses parallel arrays: operatorServiceProviders[i] authorized operators[i]
+ */
+export function migrateOperators(block: ethereum.Block, networkConfig: NetworkConfig): void {
+  // Skip if no operators to migrate
+  if (networkConfig.operators.length == 0) {
+    return
+  }
+
+  assert(
+    networkConfig.operatorServiceProviders.length == networkConfig.operators.length,
+    "Operator seed arrays must have same length"
+  )
+
+  let verifier = networkConfig.subgraphServiceAddress
+  let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
+
+  let dataService = getOrCreateDataService(verifierBytes, block.number, block.timestamp)
+
+  for (let i = 0; i < networkConfig.operators.length; i++) {
+    let operatorAddress = Address.fromString(networkConfig.operators[i])
+    let serviceProviderAddress = Address.fromString(networkConfig.operatorServiceProviders[i])
+
+    let operatorBytes = Bytes.fromHexString(operatorAddress.toHexString()) as Bytes
+    let serviceProviderBytes = Bytes.fromHexString(serviceProviderAddress.toHexString()) as Bytes
+
+    // Get or create Operator entity
+    let operator = getOrCreateOperator(operatorBytes, block.number, block.timestamp)
+    operator.entity.countAuthorizations += 1
+    saveOperator(operator.entity, block)
+
+    // Create OperatorAuthorization entity
+    let authorization = getOrCreateOperatorAuthorization(
+      operatorBytes,
+      serviceProviderBytes,
+      verifierBytes,
+      block.number,
+      block.timestamp
+    )
+    assert(authorization.isNew, "OperatorAuthorization already exists during migration")
+    authorization.entity.allowed = true
+    saveOperatorAuthorization(authorization.entity, block)
+  }
+
+  saveDataService(dataService.entity, block)
 }

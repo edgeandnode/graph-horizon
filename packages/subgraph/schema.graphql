@@ -48,6 +48,8 @@ type ServiceProvider @entity(immutable: false) {
   delegationPools: [DelegationPool!]! @derivedFrom(field: "serviceProvider")
   "Provision thaw requests for this service provider"
   provisionThawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "serviceProvider")
+  "Operator authorizations for this service provider"
+  operatorAuthorizations: [OperatorAuthorization!]! @derivedFrom(field: "serviceProvider")
 
   # Counts
   "Number of active provisions"
@@ -103,6 +105,8 @@ type DataService @entity(immutable: false) {
   delegationPools: [DelegationPool!]! @derivedFrom(field: "dataService")
   "Provision thaw requests for this data service"
   provisionThawRequests: [ProvisionThawRequest!]! @derivedFrom(field: "dataService")
+  "Operator authorizations for this data service"
+  operatorAuthorizations: [OperatorAuthorization!]! @derivedFrom(field: "dataService")
 
   # Counts
   "Active service providers with provisions to this data service"
@@ -224,12 +228,16 @@ type Provision @entity(immutable: false) {
 }
 
 type ProvisionFeeCut @entity(immutable: false) {
-  "Composite ID: provision-paymentType"
+  "Composite ID: serviceProvider-dataService-paymentType"
   id: Bytes!
 
   # Relationships
   "Provision this fee cut belongs to"
-  provision: Provision!
+  provision: Provision
+  "Service provider"
+  serviceProvider: ServiceProvider
+  "Data service"
+  dataService: DataService
 
   # State
   "Payment type (maps to PaymentTypes enum: 0 = QueryFee, 1 = IndexingFee, 2 = IndexingReward, ...)"
@@ -271,6 +279,56 @@ type ProvisionThawRequest @entity(immutable: false) {
   valid: Boolean!
   "True when tokens have been withdrawn"
   fulfilled: Boolean!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type Operator @entity(immutable: false) {
+  "Operator address"
+  id: Bytes!
+
+  # Relationships
+  "Authorizations granted to this operator"
+  authorizations: [OperatorAuthorization!]! @derivedFrom(field: "operator")
+
+  # Counts
+  "Active authorizations (allowed=true)"
+  countAuthorizations: Int!
+
+  # Metadata
+  "Block number when entity was created"
+  createdAtBlock: BigInt!
+  "Timestamp when entity was created"
+  createdAt: BigInt!
+  "Block number when entity was last updated"
+  updatedAtBlock: BigInt!
+  "Timestamp when entity was last updated"
+  updatedAt: BigInt!
+}
+
+type OperatorAuthorization @entity(immutable: false) {
+  "Composite ID: operator-serviceProvider-dataService"
+  id: Bytes!
+
+  # Relationships
+  "Operator that is authorized"
+  operator: Operator!
+  "Service provider that granted the authorization"
+  serviceProvider: ServiceProvider
+  "Data service this authorization applies to"
+  dataService: DataService
+
+  # State
+  "Whether the operator is currently authorized"
+  allowed: Boolean!
 
   # Metadata
   "Block number when entity was created"

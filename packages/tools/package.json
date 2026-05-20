@@ -6,11 +6,13 @@
   "scripts": {
     "seed:indexers": "tsx src/seed/indexers.ts",
     "seed:delegations": "tsx src/seed/delegations.ts",
+    "seed:operators": "tsx src/seed/operators.ts",
     "validate:internal": "tsx src/validation/internal.ts",
     "validate:onchain:service-providers": "tsx src/validation/onchain/service-providers.ts",
     "validate:onchain:provisions": "tsx src/validation/onchain/provisions.ts",
     "validate:onchain:delegations": "tsx src/validation/onchain/delegations.ts",
-    "validate:onchain:fee-cuts": "tsx src/validation/onchain/fee-cuts.ts"
+    "validate:onchain:fee-cuts": "tsx src/validation/onchain/fee-cuts.ts",
+    "validate:onchain:operators": "tsx src/validation/onchain/operators.ts"
   },
   "devDependencies": {
     "@types/node": "22.15.18",
