@@ -52,12 +52,15 @@ async function main(): Promise<number> {
   console.log("=== Comparing OperatorAuthorizations against on-chain state ===")
   let mismatches = 0
   let matches = 0
+  const skippedEntities: { id: string; reason: string }[] = []
 
-  let skipped = 0
   for (const auth of authorizations) {
     // Skip if serviceProvider or dataService entity doesn't exist yet
     if (!auth.serviceProvider || !auth.dataService) {
-      skipped++
+      const missing = []
+      if (!auth.serviceProvider) missing.push("ServiceProvider")
+      if (!auth.dataService) missing.push("DataService")
+      skippedEntities.push({ id: auth.id, reason: `${missing.join(", ")} entity doesn't exist` })
       continue
     }
 
@@ -82,8 +85,11 @@ async function main(): Promise<number> {
     await delay()
   }
 
-  if (skipped > 0) {
-    console.log(`  Skipped ${skipped} authorizations (serviceProvider or dataService entity doesn't exist)`)
+  if (skippedEntities.length > 0) {
+    console.log(`=== Skipped ${skippedEntities.length} authorizations ===`)
+    for (const skipped of skippedEntities) {
+      console.log(`  ${skipped.id}: ${skipped.reason}`)
+    }
     console.log("")
   }
 

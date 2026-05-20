@@ -49,12 +49,15 @@ async function main(): Promise<number> {
   console.log("=== Comparing ProvisionFeeCuts against on-chain state ===")
   let mismatches = 0
   let matches = 0
-  let skipped = 0
+  const skippedEntities: { id: string; reason: string }[] = []
 
   for (const feeCut of feeCuts) {
     // Skip if serviceProvider or dataService entity doesn't exist yet
     if (!feeCut.serviceProvider || !feeCut.dataService) {
-      skipped++
+      const missing = []
+      if (!feeCut.serviceProvider) missing.push("ServiceProvider")
+      if (!feeCut.dataService) missing.push("DataService")
+      skippedEntities.push({ id: feeCut.id, reason: `${missing.join(", ")} entity doesn't exist` })
       continue
     }
 
@@ -83,8 +86,11 @@ async function main(): Promise<number> {
     await delay()
   }
 
-  if (skipped > 0) {
-    console.log(`  Skipped ${skipped} fee cuts (serviceProvider or dataService entity doesn't exist)`)
+  if (skippedEntities.length > 0) {
+    console.log(`=== Skipped ${skippedEntities.length} fee cuts ===`)
+    for (const skipped of skippedEntities) {
+      console.log(`  ${skipped.id}: ${skipped.reason}`)
+    }
     console.log("")
   }
 

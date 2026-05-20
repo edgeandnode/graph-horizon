@@ -80,7 +80,7 @@ interface ProvisionThawRequest {
 
 interface ProvisionFeeCut {
   id: string
-  provision: { id: string }
+  provision: { id: string } | null
   paymentType: number
   feeCut: string
 }
@@ -93,8 +93,8 @@ interface Operator {
 interface OperatorAuthorization {
   id: string
   operator: { id: string }
-  serviceProvider: { id: string }
-  dataService: { id: string }
+  serviceProvider: { id: string } | null
+  dataService: { id: string } | null
   allowed: boolean
 }
 
@@ -517,7 +517,8 @@ async function main(): Promise<number> {
   for (const fc of feeCuts) {
     const issues: string[] = []
 
-    if (!provisionIds.has(fc.provision.id)) {
+    // Check provision reference (null is ok - provision may not exist yet)
+    if (fc.provision && !provisionIds.has(fc.provision.id)) {
       issues.push(`references non-existent Provision: ${fc.provision.id}`)
     }
 
@@ -592,11 +593,13 @@ async function main(): Promise<number> {
       issues.push(`references non-existent Operator: ${auth.operator.id}`)
     }
 
-    if (!spIds.has(auth.serviceProvider.id)) {
+    // Check serviceProvider reference (null is ok - SP entity may not exist yet)
+    if (auth.serviceProvider && !spIds.has(auth.serviceProvider.id)) {
       issues.push(`references non-existent ServiceProvider: ${auth.serviceProvider.id}`)
     }
 
-    if (!dsIds.has(auth.dataService.id)) {
+    // Check dataService reference (null is ok - DS entity may not exist yet)
+    if (auth.dataService && !dsIds.has(auth.dataService.id)) {
       issues.push(`references non-existent DataService: ${auth.dataService.id}`)
     }
 
