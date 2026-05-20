@@ -5,6 +5,7 @@ const GET_STAKE_SELECTOR = "0x7a766460" // getStake(address)
 const GET_SERVICE_PROVIDER_SELECTOR = "0x8cc01c86" // getServiceProvider(address)
 const GET_PROVISION_SELECTOR = "0x25d9897e" // getProvision(address,address)
 const GET_DELEGATION_POOL_SELECTOR = "0x561285e4" // getDelegationPool(address,address)
+const GET_DELEGATION_FEE_CUT_SELECTOR = "0x7573ef4f" // getDelegationFeeCut(address,address,uint8)
 const MULTICALL_SELECTOR = "0xac9650d8" // multicall(bytes[])
 
 export interface ServiceProviderData {
@@ -130,6 +131,19 @@ export async function getDelegationPool(serviceProvider: string, verifier: strin
   }
 }
 
+export async function getDelegationFeeCut(
+  serviceProvider: string,
+  verifier: string,
+  paymentType: number
+): Promise<bigint> {
+  const config = getConfig()
+  // paymentType is uint8, pad to 32 bytes
+  const paymentTypePadded = paymentType.toString(16).padStart(64, "0")
+  const callData = GET_DELEGATION_FEE_CUT_SELECTOR + padAddress(serviceProvider) + padAddress(verifier) + paymentTypePadded
+  const result = await ethCall(config.stakingAddress, callData)
+  return BigInt(result)
+}
+
 // ============================================================================
 // Multicall
 // ============================================================================
@@ -145,6 +159,11 @@ export function encodeGetProvision(serviceProvider: string, verifier: string): s
 
 export function encodeGetDelegationPool(serviceProvider: string, verifier: string): string {
   return GET_DELEGATION_POOL_SELECTOR + padAddress(serviceProvider) + padAddress(verifier)
+}
+
+export function encodeGetDelegationFeeCut(serviceProvider: string, verifier: string, paymentType: number): string {
+  const paymentTypePadded = paymentType.toString(16).padStart(64, "0")
+  return GET_DELEGATION_FEE_CUT_SELECTOR + padAddress(serviceProvider) + padAddress(verifier) + paymentTypePadded
 }
 
 // Decode result helpers

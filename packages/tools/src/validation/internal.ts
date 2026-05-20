@@ -78,6 +78,13 @@ interface ProvisionThawRequest {
   fulfilled: boolean
 }
 
+interface ProvisionFeeCut {
+  id: string
+  provision: { id: string }
+  paymentType: number
+  feeCut: string
+}
+
 // ============================================================================
 // Queries
 // ============================================================================
@@ -152,6 +159,15 @@ const PROVISION_THAW_REQUESTS_QUERY = `{
   }
 }`
 
+const PROVISION_FEE_CUTS_QUERY = `{
+  provisionFeeCuts(first: 1000) {
+    id
+    provision { id }
+    paymentType
+    feeCut
+  }
+}`
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -164,13 +180,14 @@ async function main(): Promise<number> {
 
   // Fetch all data
   console.log("=== Fetching subgraph data ===")
-  const [networkData, spData, dsData, provisionData, poolData, thawRequestData] = await Promise.all([
+  const [networkData, spData, dsData, provisionData, poolData, thawRequestData, feeCutData] = await Promise.all([
     querySubgraph<{ graphNetwork: GraphNetwork }>(subgraphUrl, GRAPH_NETWORK_QUERY),
     querySubgraph<{ serviceProviders: ServiceProvider[] }>(subgraphUrl, SERVICE_PROVIDERS_QUERY),
     querySubgraph<{ dataServices: DataService[] }>(subgraphUrl, DATA_SERVICES_QUERY),
     querySubgraph<{ provisions: Provision[] }>(subgraphUrl, PROVISIONS_QUERY),
     querySubgraph<{ delegationPools: DelegationPool[] }>(subgraphUrl, DELEGATION_POOLS_QUERY),
     querySubgraph<{ provisionThawRequests: ProvisionThawRequest[] }>(subgraphUrl, PROVISION_THAW_REQUESTS_QUERY),
+    querySubgraph<{ provisionFeeCuts: ProvisionFeeCut[] }>(subgraphUrl, PROVISION_FEE_CUTS_QUERY),
   ])
 
   const graphNetwork = networkData.graphNetwork
@@ -184,6 +201,7 @@ async function main(): Promise<number> {
   const provisions = provisionData.provisions
   const pools = poolData.delegationPools
   const thawRequests = thawRequestData.provisionThawRequests
+  const feeCuts = feeCutData.provisionFeeCuts
 
   // Filter to only SPs with stake > 0 (matches countServiceProviders semantics)
   const stakedSPs = serviceProviders.filter((sp) => BigInt(sp.tokensStaked) > 0n)
@@ -201,6 +219,7 @@ async function main(): Promise<number> {
   console.log(`  Provisions: ${provisions.length}`)
   console.log(`  DelegationPools: ${pools.length} total, ${activePools.length} with tokens`)
   console.log(`  ProvisionThawRequests: ${thawRequests.length} total, ${pendingThawRequests.length} pending, ${fulfilledThawRequests.length} fulfilled`)
+  console.log(`  ProvisionFeeCuts: ${feeCuts.length}`)
   console.log("")
 
   // ============================================================================
@@ -443,6 +462,50 @@ async function main(): Promise<number> {
   }
 
   warnings += trWarnings
+
+  // ============================================================================
+  // ProvisionFeeCut Referential Integrity
+  // ============================================================================
+
+  console.log("=== ProvisionFeeCut Referential Integrity ===")
+  let fcWarnings = 0
+
+  // Valid payment types (from IGraphPayments.PaymentTypes enum)
+  const validPaymentTypes = new Set([0, 1, 2]) // QueryFee, IndexingFee, IndexingReward
+  const MAX_FEE_CUT = 1000000n // 100% in PPM
+
+  for (const fc of feeCuts) {
+    const issues: string[] = []
+
+    if (!provisionIds.has(fc.provision.id)) {
+      issues.push(`references non-existent Provision: ${fc.provision.id}`)
+    }
+
+    if (!validPaymentTypes.has(fc.paymentType)) {
+      issues.push(`invalid paymentType: ${fc.paymentType}`)
+    }
+
+    const feeCutValue = BigInt(fc.feeCut)
+    if (feeCutValue < 0n || feeCutValue > MAX_FEE_CUT) {
+      issues.push(`feeCut out of range [0, 1000000]: ${fc.feeCut}`)
+    }
+
+    if (issues.length > 0) {
+      fcWarnings++
+      console.log(`WARNING: ${fc.id}`)
+      for (const issue of issues) {
+        console.log(`  ${issue}`)
+      }
+      console.log("")
+    }
+  }
+
+  if (fcWarnings === 0) {
+    console.log("All ProvisionFeeCut references are valid!")
+    console.log("")
+  }
+
+  warnings += fcWarnings
 
   // ============================================================================
   // Summary
