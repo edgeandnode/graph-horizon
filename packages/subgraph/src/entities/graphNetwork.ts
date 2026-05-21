@@ -1,6 +1,10 @@
 import { GraphNetwork } from "../../generated/schema"
 import { BIGINT_ZERO, GRAPH_NETWORK_ID } from "../common/constants"
 
+/**
+ * Gets or creates the GraphNetwork singleton entity.
+ * Stores global protocol-level aggregates and counters.
+ */
 export function getOrCreateGraphNetwork(): GraphNetwork {
   let entity = GraphNetwork.load(GRAPH_NETWORK_ID)
   if (entity == null) {
@@ -11,6 +15,9 @@ export function getOrCreateGraphNetwork(): GraphNetwork {
     entity.countDataServices = 0
     entity.countProvisions = 0
     entity.countDelegationPools = 0
+    entity.countPayers = 0
+    entity.countCollectors = 0
+    entity.countEscrowAccounts = 0
     entity.countProvisionSlashEvents = 0
     entity.countDelegationPoolSlashEvents = 0
 
@@ -25,6 +32,17 @@ export function getOrCreateGraphNetwork(): GraphNetwork {
     entity.tokensSlashed = BIGINT_ZERO
     entity.tokensSlashedFromProvisions = BIGINT_ZERO
     entity.tokensSlashedFromDelegationPools = BIGINT_ZERO
+
+    // Payment collection aggregates
+    entity.tokensCollected = BIGINT_ZERO
+    entity.tokensDistributedAsProtocolTax = BIGINT_ZERO
+    entity.tokensDistributedToServiceProviders = BIGINT_ZERO
+    entity.tokensDistributedToDelegationPools = BIGINT_ZERO
+    entity.tokensDistributedToDataServices = BIGINT_ZERO
+
+    // Payment escrow aggregates
+    entity.tokensEscrowed = BIGINT_ZERO
+    entity.tokensThawingFromEscrow = BIGINT_ZERO
   }
   return entity
 }

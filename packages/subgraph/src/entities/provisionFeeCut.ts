@@ -18,6 +18,10 @@ export class ProvisionFeeCutResult {
   }
 }
 
+/**
+ * Gets or creates a ProvisionFeeCut entity.
+ * Tracks the fee cut percentage for delegators by payment type on a provision.
+ */
 export function getOrCreateProvisionFeeCut(
   serviceProvider: Bytes,
   dataService: Bytes,
@@ -31,11 +35,17 @@ export function getOrCreateProvisionFeeCut(
 
   if (entity == null) {
     entity = new ProvisionFeeCut(id)
+
+    // Relationships
     entity.serviceProvider = serviceProvider
     entity.dataService = dataService
     entity.provision = getProvisionId(serviceProvider, dataService)
+
+    // State
     entity.paymentType = paymentType
     entity.feeCut = BIGINT_ZERO
+
+    // Metadata
     entity.updatedAtBlock = blockNumber
     entity.updatedAt = timestamp
   }

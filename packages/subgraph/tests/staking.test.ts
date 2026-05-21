@@ -78,6 +78,11 @@ function setupDataService(verifier: Address): void {
   ds.tokensSlashed = BIGINT_ZERO
   ds.tokensSlashedFromProvisions = BIGINT_ZERO
   ds.tokensSlashedFromDelegationPools = BIGINT_ZERO
+  ds.tokensCollected = BIGINT_ZERO
+  ds.tokensDistributedToDataService = BIGINT_ZERO
+  ds.tokensDistributedAsProtocolTax = BIGINT_ZERO
+  ds.tokensDistributedToDelegationPools = BIGINT_ZERO
+  ds.tokensDistributedToServiceProviders = BIGINT_ZERO
   ds.createdAtBlock = BigInt.fromI32(1)
   ds.createdAt = BigInt.fromI32(100)
   ds.updatedAtBlock = BigInt.fromI32(1)

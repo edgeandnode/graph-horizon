@@ -11,6 +11,10 @@ export class OperatorResult {
   }
 }
 
+/**
+ * Gets or creates an Operator entity.
+ * Operators are addresses authorized to act on behalf of service providers.
+ */
 export function getOrCreateOperator(
   operatorAddress: Bytes,
   blockNumber: BigInt,
@@ -21,7 +25,11 @@ export function getOrCreateOperator(
 
   if (entity == null) {
     entity = new Operator(operatorAddress)
+
+    // Counts
     entity.countAuthorizations = 0
+
+    // Metadata
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber

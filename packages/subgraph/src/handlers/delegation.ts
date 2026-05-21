@@ -187,6 +187,7 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
   assert(!pool.isNew, "Delegation pool does not exist.")
   assert(pool.entity.tokens >= tokens, "Slash tokens exceed pool tokens.")
   pool.entity.tokens = pool.entity.tokens.minus(tokens)
+  pool.entity.tokensSlashed = pool.entity.tokensSlashed.plus(tokens)
   saveDelegationPool(pool.entity, event.block)
 
   // Update DataService

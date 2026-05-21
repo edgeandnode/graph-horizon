@@ -47,6 +47,11 @@ function setupDataService(verifier: Address): void {
   ds.tokensSlashed = BIGINT_ZERO
   ds.tokensSlashedFromProvisions = BIGINT_ZERO
   ds.tokensSlashedFromDelegationPools = BIGINT_ZERO
+  ds.tokensCollected = BIGINT_ZERO
+  ds.tokensDistributedToDataService = BIGINT_ZERO
+  ds.tokensDistributedAsProtocolTax = BIGINT_ZERO
+  ds.tokensDistributedToDelegationPools = BIGINT_ZERO
+  ds.tokensDistributedToServiceProviders = BIGINT_ZERO
   ds.createdAtBlock = BigInt.fromI32(1)
   ds.createdAt = BigInt.fromI32(100)
   ds.updatedAtBlock = BigInt.fromI32(1)
@@ -72,6 +77,8 @@ function setupDelegationPool(
   pool.tokens = tokens
   pool.shares = tokens // 1:1 for simplicity
   pool.tokensThawing = BigInt.zero()
+  pool.tokensDistributed = BigInt.zero()
+  pool.tokensSlashed = BigInt.zero()
   pool.legacyIndexingRewardCut = legacyIndexingRewardCut
   pool.createdAtBlock = BigInt.fromI32(1)
   pool.createdAt = BigInt.fromI32(1000)
@@ -87,6 +94,7 @@ function setupServiceProvider(address: Address, tokensDelegated: BigInt): void {
   sp.countProvisions = 0
   sp.countProvisionSlashEvents = 0
   sp.countDelegationPoolSlashEvents = 0
+  sp.countEscrowAccounts = 0
   // Stake
   sp.tokensStaked = BigInt.fromI32(1000)
   sp.tokensProvisioned = BigInt.zero()
@@ -99,6 +107,13 @@ function setupServiceProvider(address: Address, tokensDelegated: BigInt): void {
   sp.tokensSlashed = BigInt.zero()
   sp.tokensSlashedFromProvisions = BigInt.zero()
   sp.tokensSlashedFromDelegationPools = BigInt.zero()
+  // Escrow/Payments
+  sp.tokensCollected = BigInt.zero()
+  sp.tokensDistributedToServiceProvider = BigInt.zero()
+  sp.tokensDistributedAsProtocolTax = BigInt.zero()
+  sp.tokensDistributedToDelegationPools = BigInt.zero()
+  sp.tokensDistributedToDataServices = BigInt.zero()
+  sp.tokensEscrowed = BigInt.zero()
   // Metadata
   sp.createdAtBlock = BigInt.fromI32(1)
   sp.createdAt = BigInt.fromI32(1000)
@@ -117,6 +132,9 @@ function setupGraphNetwork(tokensDelegated: BigInt): void {
   network.countDelegationPools = 1
   network.countProvisionSlashEvents = 0
   network.countDelegationPoolSlashEvents = 0
+  network.countPayers = 0
+  network.countCollectors = 0
+  network.countEscrowAccounts = 0
   // Stake aggregates
   network.tokensStaked = BigInt.zero()
   network.tokensProvisioned = BigInt.zero()
@@ -127,6 +145,14 @@ function setupGraphNetwork(tokensDelegated: BigInt): void {
   network.tokensSlashed = BigInt.zero()
   network.tokensSlashedFromProvisions = BigInt.zero()
   network.tokensSlashedFromDelegationPools = BigInt.zero()
+  // Payment/Escrow aggregates
+  network.tokensCollected = BigInt.zero()
+  network.tokensDistributedAsProtocolTax = BigInt.zero()
+  network.tokensDistributedToServiceProviders = BigInt.zero()
+  network.tokensDistributedToDelegationPools = BigInt.zero()
+  network.tokensDistributedToDataServices = BigInt.zero()
+  network.tokensEscrowed = BigInt.zero()
+  network.tokensThawingFromEscrow = BigInt.zero()
   network.save()
 }
 

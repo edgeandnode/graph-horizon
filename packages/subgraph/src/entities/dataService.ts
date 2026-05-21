@@ -12,6 +12,10 @@ export class DataServiceResult {
   }
 }
 
+/**
+ * Gets or creates a DataService entity.
+ * Data services (verifiers) are contracts that service providers provision stake to.
+ */
 export function getOrCreateDataService(
   id: Bytes,
   blockNumber: BigInt,
@@ -40,6 +44,13 @@ export function getOrCreateDataService(
     entity.tokensSlashed = BIGINT_ZERO
     entity.tokensSlashedFromProvisions = BIGINT_ZERO
     entity.tokensSlashedFromDelegationPools = BIGINT_ZERO
+
+    // Payments
+    entity.tokensCollected = BIGINT_ZERO
+    entity.tokensDistributedToDataService = BIGINT_ZERO
+    entity.tokensDistributedAsProtocolTax = BIGINT_ZERO
+    entity.tokensDistributedToDelegationPools = BIGINT_ZERO
+    entity.tokensDistributedToServiceProviders = BIGINT_ZERO
 
     // Metadata
     entity.createdAtBlock = blockNumber

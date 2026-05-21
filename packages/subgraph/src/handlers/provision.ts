@@ -246,6 +246,7 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   assert(!provision.isNew, "Provision does not exist.")
   assert(provision.entity.tokens >= event.params.tokens, "Slash exceeds provision tokens")
   provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
+  provision.entity.tokensSlashed = provision.entity.tokensSlashed.plus(event.params.tokens)
   saveProvision(provision.entity, event.block)
 
   // DataService

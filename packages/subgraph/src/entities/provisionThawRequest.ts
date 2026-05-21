@@ -12,6 +12,10 @@ export class ProvisionThawRequestResult {
   }
 }
 
+/**
+ * Gets or creates a ProvisionThawRequest entity.
+ * Tracks requests to thaw (withdraw) tokens from a provision.
+ */
 export function getOrCreateProvisionThawRequest(
   id: Bytes,
   serviceProvider: Bytes,
@@ -24,15 +28,23 @@ export function getOrCreateProvisionThawRequest(
 
   if (entity == null) {
     entity = new ProvisionThawRequest(id)
+
+    // Relationships
     entity.provision = getProvisionId(serviceProvider, dataService)
     entity.serviceProvider = serviceProvider
     entity.dataService = dataService
+
+    // State
     entity.shares = BigInt.zero()
     entity.thawingUntil = BigInt.zero()
     entity.thawingNonce = BigInt.zero()
     entity.tokensWithdrawn = null
+
+    // Status
     entity.valid = true
     entity.fulfilled = false
+
+    // Metadata
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber
