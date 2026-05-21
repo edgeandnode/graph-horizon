@@ -16,10 +16,7 @@ export function handleOperatorSet(event: OperatorSet): void {
   let serviceProviderBytes = Bytes.fromHexString(event.params.serviceProvider.toHexString()) as Bytes
   let dataServiceBytes = Bytes.fromHexString(event.params.verifier.toHexString()) as Bytes
 
-  // Get or create Operator entity
   let operator = getOrCreateOperator(operatorBytes, event.block.number, event.block.timestamp)
-
-  // Get or create OperatorAuthorization entity
   let authorization = getOrCreateOperatorAuthorization(
     operatorBytes,
     serviceProviderBytes,
@@ -33,10 +30,8 @@ export function handleOperatorSet(event: OperatorSet): void {
   let isAllowed = event.params.allowed
 
   if (!wasAllowed && isAllowed) {
-    // New authorization
     operator.entity.countAuthorizations += 1
   } else if (wasAllowed && !isAllowed) {
-    // Revoked authorization
     operator.entity.countAuthorizations -= 1
   }
 

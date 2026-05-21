@@ -39,7 +39,7 @@ export function handleDeposit(event: Deposit): void {
   let collectorIsActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   saveCollector(collector.entity, event.block)
 
-  // service provider
+  // service provider - can be created by this event, but that does not make it an "active" service provider
   let serviceProvider = getOrCreateServiceProvider(receiverAddress, event.block.number, event.block.timestamp)
   serviceProvider.entity.tokensEscrowed = serviceProvider.entity.tokensEscrowed.plus(tokens)
   saveServiceProvider(serviceProvider.entity, event.block)

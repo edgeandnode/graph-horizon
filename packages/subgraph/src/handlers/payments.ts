@@ -9,6 +9,9 @@ import { getOrCreateDelegationPool, saveDelegationPool } from "../entities/deleg
 /**
  * Handles GraphPaymentCollected event from GraphPayments.
  * Updates payment collection aggregates across all relevant entities.
+ * Note that this event might create many entities but that does not mean they will be considered "active".
+ * For example, a service provider might get payment collected to, but they are not active unless they have
+ * staked tokens.
  */
 export function handleGraphPaymentCollected(event: GraphPaymentCollected): void {
   let receiverAddress = Bytes.fromHexString(event.params.receiver.toHexString()) as Bytes
@@ -31,7 +34,7 @@ export function handleGraphPaymentCollected(event: GraphPaymentCollected): void 
   graphNetwork.tokensDistributedToServiceProviders = graphNetwork.tokensDistributedToServiceProviders.plus(tokensReceiver)
   saveGraphNetwork(graphNetwork)
 
-  // ServiceProvider
+  // ServiceProvider - can be created by this event, but that does not make it an "active" service provider
   let serviceProvider = getOrCreateServiceProvider(receiverAddress, event.block.number, event.block.timestamp)
   serviceProvider.entity.tokensCollected = serviceProvider.entity.tokensCollected.plus(tokens)
   serviceProvider.entity.tokensDistributedToServiceProvider = serviceProvider.entity.tokensDistributedToServiceProvider.plus(
@@ -48,7 +51,7 @@ export function handleGraphPaymentCollected(event: GraphPaymentCollected): void 
   )
   saveServiceProvider(serviceProvider.entity, event.block)
 
-  // DataService
+  // DataService - can be created by this event, but that does not make it an "active" data service
   let dataService = getOrCreateDataService(dataServiceAddress, event.block.number, event.block.timestamp)
   dataService.entity.tokensCollected = dataService.entity.tokensCollected.plus(tokens)
   dataService.entity.tokensDistributedToDataService = dataService.entity.tokensDistributedToDataService.plus(
@@ -65,12 +68,12 @@ export function handleGraphPaymentCollected(event: GraphPaymentCollected): void 
   )
   saveDataService(dataService.entity, event.block)
 
-  // Provision
+  // Provision - can be created by this event, but that does not make it an "active" provision
   let provision = getOrCreateProvision(receiverAddress, dataServiceAddress, event.block.number, event.block.timestamp)
   provision.entity.tokensCollected = provision.entity.tokensCollected.plus(tokens)
   saveProvision(provision.entity, event.block)
 
-  // DelegationPool
+  // DelegationPool - can be created by this event, but that does not make it an "active" delegation pool
   let delegationPool = getOrCreateDelegationPool(
     receiverAddress,
     dataServiceAddress,

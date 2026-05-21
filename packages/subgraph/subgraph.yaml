@@ -85,7 +85,7 @@ dataSources:
     source:
       address: "0x7Aae8ae011927BC36Cb4d0d3e81f2E6E30daE06D"
       abi: GraphPayments
-      startBlock: 408825706
+      startBlock: 397491099
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -109,7 +109,7 @@ dataSources:
     source:
       address: "0xf6Fcc27aAf1fcD8B254498c9794451d82afC673E"
       abi: PaymentsEscrow
-      startBlock: 408825706
+      startBlock: 397491106
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

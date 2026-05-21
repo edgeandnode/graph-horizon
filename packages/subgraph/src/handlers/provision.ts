@@ -62,7 +62,7 @@ export function handleProvisionCreated(event: ProvisionCreated): void {
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
-  if (dataService.isNew) {
+  if (dataService.entity.countProvisions === 1) {
     graphNetwork.countDataServices += 1
   }
   graphNetwork.countProvisions += 1
