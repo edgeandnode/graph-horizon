@@ -27,25 +27,20 @@ export function handleDeposit(event: Deposit): void {
 
   // payer
   let payer = getOrCreatePayer(payerAddress, event.block.number, event.block.timestamp)
-  if (payer.isNew) {
-    graphNetwork.countPayers += 1
-  }
+  let payerWasActive = payer.entity.tokensEscrowed.gt(BIGINT_ZERO)
   payer.entity.tokensEscrowed = payer.entity.tokensEscrowed.plus(tokens)
+  let payerIsActive = payer.entity.tokensEscrowed.gt(BIGINT_ZERO)
   savePayer(payer.entity, event.block)
 
   // collector
   let collector = getOrCreateCollector(collectorAddress, event.block.number, event.block.timestamp)
-  if (collector.isNew) {
-    graphNetwork.countCollectors += 1
-  }
+  let collectorWasActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   collector.entity.tokensEscrowed = collector.entity.tokensEscrowed.plus(tokens)
+  let collectorIsActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   saveCollector(collector.entity, event.block)
 
   // service provider
   let serviceProvider = getOrCreateServiceProvider(receiverAddress, event.block.number, event.block.timestamp)
-  if (serviceProvider.isNew) {
-    graphNetwork.countServiceProviders += 1
-  }
   serviceProvider.entity.tokensEscrowed = serviceProvider.entity.tokensEscrowed.plus(tokens)
   saveServiceProvider(serviceProvider.entity, event.block)
 
@@ -57,7 +52,19 @@ export function handleDeposit(event: Deposit): void {
     event.block.number,
     event.block.timestamp
   )
-  if (escrowAccount.isNew) {
+  let accountWasActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
+  escrowAccount.entity.tokens = escrowAccount.entity.tokens.plus(tokens)
+  let accountIsActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
+  saveEscrowAccount(escrowAccount.entity, event.block)
+
+  // Increment counters if entities became active
+  if (!payerWasActive && payerIsActive) {
+    graphNetwork.countPayers += 1
+  }
+  if (!collectorWasActive && collectorIsActive) {
+    graphNetwork.countCollectors += 1
+  }
+  if (!accountWasActive && accountIsActive) {
     graphNetwork.countEscrowAccounts += 1
     payer.entity.countEscrowAccounts += 1
     collector.entity.countEscrowAccounts += 1
@@ -66,8 +73,6 @@ export function handleDeposit(event: Deposit): void {
     saveCollector(collector.entity, event.block)
     saveServiceProvider(serviceProvider.entity, event.block)
   }
-  escrowAccount.entity.tokens = escrowAccount.entity.tokens.plus(tokens)
-  saveEscrowAccount(escrowAccount.entity, event.block)
 
   // GraphNetwork
   graphNetwork.tokensEscrowed = graphNetwork.tokensEscrowed.plus(tokens)
@@ -103,10 +108,12 @@ export function handleThaw(event: Thaw): void {
   assert(!escrowAccount.isNew, "Escrow account does not exist.")
 
   // escrow account
+  let accountWasActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
   assert(escrowAccount.entity.tokens >= tokens, "Thaw tokens greater than escrow account tokens.")
   escrowAccount.entity.tokens = escrowAccount.entity.tokens.minus(tokens)
   escrowAccount.entity.tokensThawing = escrowAccount.entity.tokensThawing.plus(tokens)
   escrowAccount.entity.thawEndTimestamp = thawEndTimestamp
+  let accountIsActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
   saveEscrowAccount(escrowAccount.entity, event.block)
 
   // payer
@@ -119,6 +126,22 @@ export function handleThaw(event: Thaw): void {
 
   // GraphNetwork
   graphNetwork.tokensThawingFromEscrow = graphNetwork.tokensThawingFromEscrow.plus(tokens)
+  // Decrement counters if escrow account became inactive
+  if (accountWasActive && !accountIsActive) {
+    assert(graphNetwork.countEscrowAccounts > 0, "Network escrow account count is zero.")
+    graphNetwork.countEscrowAccounts -= 1
+    assert(payer.entity.countEscrowAccounts > 0, "Payer escrow account count is zero.")
+    payer.entity.countEscrowAccounts -= 1
+    assert(collector.entity.countEscrowAccounts > 0, "Collector escrow account count is zero.")
+    collector.entity.countEscrowAccounts -= 1
+    // Need to get service provider to decrement its count
+    let serviceProvider = getOrCreateServiceProvider(receiverAddress, event.block.number, event.block.timestamp)
+    assert(serviceProvider.entity.countEscrowAccounts > 0, "Service provider escrow account count is zero.")
+    serviceProvider.entity.countEscrowAccounts -= 1
+    savePayer(payer.entity, event.block)
+    saveCollector(collector.entity, event.block)
+    saveServiceProvider(serviceProvider.entity, event.block)
+  }
   saveGraphNetwork(graphNetwork)
 }
 
@@ -150,9 +173,11 @@ export function handleCancelThaw(event: CancelThaw): void {
   assert(!escrowAccount.isNew, "Escrow account does not exist.")
 
   // escrow account
+  let accountWasActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
   escrowAccount.entity.tokens = escrowAccount.entity.tokens.plus(tokensThawing)
   escrowAccount.entity.tokensThawing = BIGINT_ZERO
   escrowAccount.entity.thawEndTimestamp = BIGINT_ZERO
+  let accountIsActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
   saveEscrowAccount(escrowAccount.entity, event.block)
 
   // payer
@@ -168,6 +193,18 @@ export function handleCancelThaw(event: CancelThaw): void {
   // GraphNetwork
   assert(graphNetwork.tokensThawingFromEscrow >= tokensThawing, "Cancel tokens greater than network tokens thawing.")
   graphNetwork.tokensThawingFromEscrow = graphNetwork.tokensThawingFromEscrow.minus(tokensThawing)
+  // Increment counters if escrow account became active
+  if (!accountWasActive && accountIsActive) {
+    graphNetwork.countEscrowAccounts += 1
+    payer.entity.countEscrowAccounts += 1
+    collector.entity.countEscrowAccounts += 1
+    // Need to get service provider to increment its count
+    let serviceProvider = getOrCreateServiceProvider(receiverAddress, event.block.number, event.block.timestamp)
+    serviceProvider.entity.countEscrowAccounts += 1
+    savePayer(payer.entity, event.block)
+    saveCollector(collector.entity, event.block)
+    saveServiceProvider(serviceProvider.entity, event.block)
+  }
   saveGraphNetwork(graphNetwork)
 }
 
@@ -207,17 +244,21 @@ export function handleWithdraw(event: Withdraw): void {
   saveEscrowAccount(escrowAccount.entity, event.block)
 
   // payer
+  let payerWasActive = payer.entity.tokensEscrowed.gt(BIGINT_ZERO)
   assert(payer.entity.tokensEscrowed >= tokens, "Withdraw tokens greater than payer tokens escrowed.")
   payer.entity.tokensEscrowed = payer.entity.tokensEscrowed.minus(tokens)
   assert(payer.entity.tokensThawing >= tokens, "Withdraw tokens greater than payer tokens thawing.")
   payer.entity.tokensThawing = payer.entity.tokensThawing.minus(tokens)
+  let payerIsActive = payer.entity.tokensEscrowed.gt(BIGINT_ZERO)
   savePayer(payer.entity, event.block)
 
   // collector
+  let collectorWasActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   assert(collector.entity.tokensEscrowed >= tokens, "Withdraw tokens greater than collector tokens escrowed.")
   collector.entity.tokensEscrowed = collector.entity.tokensEscrowed.minus(tokens)
   assert(collector.entity.tokensThawing >= tokens, "Withdraw tokens greater than collector tokens thawing.")
   collector.entity.tokensThawing = collector.entity.tokensThawing.minus(tokens)
+  let collectorIsActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   saveCollector(collector.entity, event.block)
 
   // service provider
@@ -228,6 +269,15 @@ export function handleWithdraw(event: Withdraw): void {
   // Graph Network
   graphNetwork.tokensEscrowed = graphNetwork.tokensEscrowed.minus(tokens)
   graphNetwork.tokensThawingFromEscrow = graphNetwork.tokensThawingFromEscrow.minus(tokens)
+  // Decrement counters if entities became inactive
+  if (payerWasActive && !payerIsActive) {
+    assert(graphNetwork.countPayers > 0, "Network payer count is zero.")
+    graphNetwork.countPayers -= 1
+  }
+  if (collectorWasActive && !collectorIsActive) {
+    assert(graphNetwork.countCollectors > 0, "Network collector count is zero.")
+    graphNetwork.countCollectors -= 1
+  }
   saveGraphNetwork(graphNetwork)
 }
 
@@ -265,21 +315,27 @@ export function handleEscrowCollected(event: EscrowCollected): void {
   assert(!escrowAccount.isNew, "Escrow account does not exist.")
 
   // escrow account
+  let accountWasActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
   assert(escrowAccount.entity.tokens >= tokens, "Collect tokens greater than escrow account tokens.")
   escrowAccount.entity.tokens = escrowAccount.entity.tokens.minus(tokens)
   escrowAccount.entity.tokensCollected = escrowAccount.entity.tokensCollected.plus(tokens)
+  let accountIsActive = escrowAccount.entity.tokens.gt(BIGINT_ZERO)
   saveEscrowAccount(escrowAccount.entity, event.block)
 
   // payer
+  let payerWasActive = payer.entity.tokensEscrowed.gt(BIGINT_ZERO)
   assert(payer.entity.tokensEscrowed >= tokens, "Collect tokens greater than payer tokens escrowed.")
   payer.entity.tokensEscrowed = payer.entity.tokensEscrowed.minus(tokens)
   payer.entity.tokensCollected = payer.entity.tokensCollected.plus(tokens)
+  let payerIsActive = payer.entity.tokensEscrowed.gt(BIGINT_ZERO)
   savePayer(payer.entity, event.block)
 
   // collector
+  let collectorWasActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   assert(collector.entity.tokensEscrowed >= tokens, "Collect tokens greater than collector tokens escrowed.")
   collector.entity.tokensEscrowed = collector.entity.tokensEscrowed.minus(tokens)
   collector.entity.tokensCollected = collector.entity.tokensCollected.plus(tokens)
+  let collectorIsActive = collector.entity.tokensEscrowed.gt(BIGINT_ZERO)
   saveCollector(collector.entity, event.block)
 
   // service provider
@@ -290,5 +346,27 @@ export function handleEscrowCollected(event: EscrowCollected): void {
   // GraphNetwork
   assert(graphNetwork.tokensEscrowed >= tokens, "Collect tokens greater than network tokens escrowed.")
   graphNetwork.tokensEscrowed = graphNetwork.tokensEscrowed.minus(tokens)
+  // Decrement counters if entities became inactive
+  if (accountWasActive && !accountIsActive) {
+    assert(graphNetwork.countEscrowAccounts > 0, "Network escrow account count is zero.")
+    graphNetwork.countEscrowAccounts -= 1
+    assert(payer.entity.countEscrowAccounts > 0, "Payer escrow account count is zero.")
+    payer.entity.countEscrowAccounts -= 1
+    assert(collector.entity.countEscrowAccounts > 0, "Collector escrow account count is zero.")
+    collector.entity.countEscrowAccounts -= 1
+    assert(serviceProvider.entity.countEscrowAccounts > 0, "Service provider escrow account count is zero.")
+    serviceProvider.entity.countEscrowAccounts -= 1
+    savePayer(payer.entity, event.block)
+    saveCollector(collector.entity, event.block)
+    saveServiceProvider(serviceProvider.entity, event.block)
+  }
+  if (payerWasActive && !payerIsActive) {
+    assert(graphNetwork.countPayers > 0, "Network payer count is zero.")
+    graphNetwork.countPayers -= 1
+  }
+  if (collectorWasActive && !collectorIsActive) {
+    assert(graphNetwork.countCollectors > 0, "Network collector count is zero.")
+    graphNetwork.countCollectors -= 1
+  }
   saveGraphNetwork(graphNetwork)
 }

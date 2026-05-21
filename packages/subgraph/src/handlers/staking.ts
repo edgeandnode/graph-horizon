@@ -23,6 +23,7 @@ export function handleHorizonStakeDeposited(event: HorizonStakeDeposited): void 
   )
 
   // ServiceProvider
+  let wasActive = serviceProvider.entity.tokensStaked.gt(BIGINT_ZERO)
   serviceProvider.entity.tokensStaked = serviceProvider.entity.tokensStaked.plus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
   serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
@@ -30,7 +31,7 @@ export function handleHorizonStakeDeposited(event: HorizonStakeDeposited): void 
 
   // GraphNetwork
   graphNetwork.tokensStaked = graphNetwork.tokensStaked.plus(event.params.tokens)
-  if (serviceProvider.isNew) {
+  if (!wasActive) {
     graphNetwork.countServiceProviders += 1
   }
   saveGraphNetwork(graphNetwork)

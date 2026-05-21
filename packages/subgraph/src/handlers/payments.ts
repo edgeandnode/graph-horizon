@@ -33,10 +33,6 @@ export function handleGraphPaymentCollected(event: GraphPaymentCollected): void 
 
   // ServiceProvider
   let serviceProvider = getOrCreateServiceProvider(receiverAddress, event.block.number, event.block.timestamp)
-  if (serviceProvider.isNew) {
-    graphNetwork.countServiceProviders += 1
-    saveGraphNetwork(graphNetwork)
-  }
   serviceProvider.entity.tokensCollected = serviceProvider.entity.tokensCollected.plus(tokens)
   serviceProvider.entity.tokensDistributedToServiceProvider = serviceProvider.entity.tokensDistributedToServiceProvider.plus(
     tokensReceiver
@@ -54,10 +50,6 @@ export function handleGraphPaymentCollected(event: GraphPaymentCollected): void 
 
   // DataService
   let dataService = getOrCreateDataService(dataServiceAddress, event.block.number, event.block.timestamp)
-  if (dataService.isNew) {
-    graphNetwork.countDataServices += 1
-    saveGraphNetwork(graphNetwork)
-  }
   dataService.entity.tokensCollected = dataService.entity.tokensCollected.plus(tokens)
   dataService.entity.tokensDistributedToDataService = dataService.entity.tokensDistributedToDataService.plus(
     tokensDataService

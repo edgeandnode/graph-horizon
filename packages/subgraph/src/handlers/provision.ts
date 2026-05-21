@@ -1,4 +1,5 @@
 import { Bytes } from "@graphprotocol/graph-ts"
+import { BIGINT_ZERO } from "../common/constants"
 import {
   ProvisionCreated,
   ProvisionIncreased,
@@ -186,10 +187,12 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
 
   // Provision
   assert(!provision.isNew, "Provision does not exist.")
+  let provisionWasActive = provision.entity.tokens.gt(BIGINT_ZERO)
   assert(provision.entity.tokens >= event.params.tokens, "Deprovision exceeds provision tokens.")
   provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
   assert(provision.entity.tokensThawing >= event.params.tokens, "Deprovision exceeds thawing tokens.")
   provision.entity.tokensThawing = provision.entity.tokensThawing.minus(event.params.tokens)
+  let provisionIsActive = provision.entity.tokens.gt(BIGINT_ZERO)
   saveProvision(provision.entity, event.block)
 
   // DataService
@@ -198,6 +201,13 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
   dataService.entity.tokensThawingFromProvisions = dataService.entity.tokensThawingFromProvisions.minus(event.params.tokens)
   assert(dataService.entity.tokensProvisioned >= event.params.tokens, "Deprovision exceeds data service tokens provisioned.")
   dataService.entity.tokensProvisioned = dataService.entity.tokensProvisioned.minus(event.params.tokens)
+  // Decrement counters if provision became inactive
+  if (provisionWasActive && !provisionIsActive) {
+    assert(dataService.entity.countProvisions > 0, "Data service provision count is zero.")
+    dataService.entity.countProvisions -= 1
+    assert(dataService.entity.countServiceProviders > 0, "Data service service provider count is zero.")
+    dataService.entity.countServiceProviders -= 1
+  }
   saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
@@ -208,6 +218,11 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
   serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.minus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
   serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  // Decrement counter if provision became inactive
+  if (provisionWasActive && !provisionIsActive) {
+    assert(serviceProvider.entity.countProvisions > 0, "Service provider provision count is zero.")
+    serviceProvider.entity.countProvisions -= 1
+  }
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
@@ -215,6 +230,16 @@ export function handleTokensDeprovisioned(event: TokensDeprovisioned): void {
   graphNetwork.tokensThawingFromProvisions = graphNetwork.tokensThawingFromProvisions.minus(event.params.tokens)
   assert(graphNetwork.tokensProvisioned >= event.params.tokens, "Deprovision exceeds network tokens provisioned.")
   graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.minus(event.params.tokens)
+  // Decrement counters if provision became inactive
+  if (provisionWasActive && !provisionIsActive) {
+    assert(graphNetwork.countProvisions > 0, "Network provision count is zero.")
+    graphNetwork.countProvisions -= 1
+    // Decrement data service count if this was the DS's last active provision
+    if (dataService.entity.countProvisions == 0) {
+      assert(graphNetwork.countDataServices > 0, "Network data service count is zero.")
+      graphNetwork.countDataServices -= 1
+    }
+  }
   saveGraphNetwork(graphNetwork)
 }
 
@@ -244,9 +269,11 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
 
   // Provision
   assert(!provision.isNew, "Provision does not exist.")
+  let provisionWasActive = provision.entity.tokens.gt(BIGINT_ZERO)
   assert(provision.entity.tokens >= event.params.tokens, "Slash exceeds provision tokens")
   provision.entity.tokens = provision.entity.tokens.minus(event.params.tokens)
   provision.entity.tokensSlashed = provision.entity.tokensSlashed.plus(event.params.tokens)
+  let provisionIsActive = provision.entity.tokens.gt(BIGINT_ZERO)
   saveProvision(provision.entity, event.block)
 
   // DataService
@@ -256,10 +283,18 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   dataService.entity.countProvisionSlashEvents += 1
   dataService.entity.tokensSlashed = dataService.entity.tokensSlashed.plus(event.params.tokens)
   dataService.entity.tokensSlashedFromProvisions = dataService.entity.tokensSlashedFromProvisions.plus(event.params.tokens)
+  // Decrement counters if provision became inactive
+  if (provisionWasActive && !provisionIsActive) {
+    assert(dataService.entity.countProvisions > 0, "Data service provision count is zero.")
+    dataService.entity.countProvisions -= 1
+    assert(dataService.entity.countServiceProviders > 0, "Data service service provider count is zero.")
+    dataService.entity.countServiceProviders -= 1
+  }
   saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
   assert(!serviceProvider.isNew, "Service provider does not exist.")
+  let spWasActive = serviceProvider.entity.tokensStaked.gt(BIGINT_ZERO)
   assert(serviceProvider.entity.tokensStaked >= event.params.tokens, "Slash exceeds service provider tokens staked.")
   serviceProvider.entity.tokensStaked = serviceProvider.entity.tokensStaked.minus(event.params.tokens)
   assert(serviceProvider.entity.tokensProvisioned >= event.params.tokens, "Slash exceeds service provider tokens provisioned.")
@@ -269,6 +304,12 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   serviceProvider.entity.countProvisionSlashEvents += 1
   serviceProvider.entity.tokensSlashed = serviceProvider.entity.tokensSlashed.plus(event.params.tokens)
   serviceProvider.entity.tokensSlashedFromProvisions = serviceProvider.entity.tokensSlashedFromProvisions.plus(event.params.tokens)
+  let spIsActive = serviceProvider.entity.tokensStaked.gt(BIGINT_ZERO)
+  // Decrement counter if provision became inactive
+  if (provisionWasActive && !provisionIsActive) {
+    assert(serviceProvider.entity.countProvisions > 0, "Service provider provision count is zero.")
+    serviceProvider.entity.countProvisions -= 1
+  }
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
@@ -279,6 +320,21 @@ export function handleProvisionSlashed(event: ProvisionSlashed): void {
   graphNetwork.countProvisionSlashEvents += 1
   graphNetwork.tokensSlashed = graphNetwork.tokensSlashed.plus(event.params.tokens)
   graphNetwork.tokensSlashedFromProvisions = graphNetwork.tokensSlashedFromProvisions.plus(event.params.tokens)
+  // Decrement service provider count if SP became inactive (tokensStaked == 0)
+  if (spWasActive && !spIsActive) {
+    assert(graphNetwork.countServiceProviders > 0, "Network service provider count is zero.")
+    graphNetwork.countServiceProviders -= 1
+  }
+  // Decrement counters if provision became inactive
+  if (provisionWasActive && !provisionIsActive) {
+    assert(graphNetwork.countProvisions > 0, "Network provision count is zero.")
+    graphNetwork.countProvisions -= 1
+    // Decrement data service count if this was the DS's last active provision
+    if (dataService.entity.countProvisions == 0) {
+      assert(graphNetwork.countDataServices > 0, "Network data service count is zero.")
+      graphNetwork.countDataServices -= 1
+    }
+  }
   saveGraphNetwork(graphNetwork)
 }
 

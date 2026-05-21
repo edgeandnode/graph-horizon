@@ -232,7 +232,7 @@ describe("handleDeposit", () => {
 
     // GraphNetwork
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countEscrowAccounts", "2")
-    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countServiceProviders", "2")
+    // Note: countServiceProviders = 0 because SPs created via escrow don't have stake (tokensStaked > 0)
   })
 })
 

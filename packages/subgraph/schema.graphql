@@ -3,23 +3,23 @@ type GraphNetwork @entity(immutable: false) {
   id: Bytes!
 
   # Counts
-  "Active service providers"
+  "Active service providers (tokensStaked > 0)"
   countServiceProviders: Int!
-  "Active data services (verifiers)"
+  "Active data services (at least one provision with tokens > 0)"
   countDataServices: Int!
-  "Active provisions"
+  "Active provisions (tokens > 0)"
   countProvisions: Int!
-  "Active delegation pools"
+  "Active delegation pools (tokens > 0)"
   countDelegationPools: Int!
-  "Active payers"
+  "Active payers (tokensEscrowed > 0)"
   countPayers: Int!
-  "Active collectors"
+  "Active collectors (tokensEscrowed > 0)"
   countCollectors: Int!
-  "Active escrow accounts"
+  "Active escrow accounts (tokens > 0)"
   countEscrowAccounts: Int!
-  "Provision slash events"
+  "Total provision slash events (cumulative)"
   countProvisionSlashEvents: Int!
-  "Delegation pool slash events"
+  "Total delegation pool slash events (cumulative)"
   countDelegationPoolSlashEvents: Int!
 
   # Stake aggregates
@@ -78,13 +78,13 @@ type ServiceProvider @entity(immutable: false) {
   escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "serviceProvider")
 
   # Counts
-  "Number of active provisions"
+  "Active provisions for this service provider (tokens > 0)"
   countProvisions: Int!
-  "Active escrow accounts"
+  "Active escrow accounts for this service provider (tokens > 0)"
   countEscrowAccounts: Int!
-  "Provision slash events"
+  "Total provision slash events for this service provider (cumulative)"
   countProvisionSlashEvents: Int!
-  "Delegation pool slash events"
+  "Total delegation pool slash events for this service provider (cumulative)"
   countDelegationPoolSlashEvents: Int!
 
   # Stake
@@ -153,15 +153,15 @@ type DataService @entity(immutable: false) {
   operatorAuthorizations: [OperatorAuthorization!]! @derivedFrom(field: "dataService")
 
   # Counts
-  "Active service providers with provisions to this data service"
+  "Active service providers with provisions to this data service (provision tokens > 0)"
   countServiceProviders: Int!
-  "Active provisions"
+  "Active provisions to this data service (tokens > 0)"
   countProvisions: Int!
-  "Active delegation pools"
+  "Active delegation pools for this data service (tokens > 0)"
   countDelegationPools: Int!
-  "Provision slash events"
+  "Total provision slash events for this data service (cumulative)"
   countProvisionSlashEvents: Int!
-  "Delegation pool slash events"
+  "Total delegation pool slash events for this data service (cumulative)"
   countDelegationPoolSlashEvents: Int!
 
   # Tokens
@@ -364,7 +364,7 @@ type Operator @entity(immutable: false) {
   authorizations: [OperatorAuthorization!]! @derivedFrom(field: "operator")
 
   # Counts
-  "Active authorizations (allowed=true)"
+  "Active authorizations for this operator (allowed == true)"
   countAuthorizations: Int!
 
   # Metadata
@@ -414,7 +414,7 @@ type Payer @entity(immutable: false) {
   escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "payer")
 
   # Counts
-  "Active escrow accounts"
+  "Active escrow accounts funded by this payer (tokens > 0)"
   countEscrowAccounts: Int!
 
   # Tokens
@@ -445,7 +445,7 @@ type Collector @entity(immutable: false) {
   escrowAccounts: [EscrowAccount!]! @derivedFrom(field: "collector")
 
   # Counts
-  "Active escrow accounts"
+  "Active escrow accounts using this collector (tokens > 0)"
   countEscrowAccounts: Int!
 
   # Tokens
