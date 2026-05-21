@@ -96,12 +96,19 @@ export function handleProvisionIncreased(event: ProvisionIncreased): void {
 
   // Provision
   assert(!provision.isNew, "Provision does not exist.")
+  let provisionWasActive = provision.entity.tokens.gt(BIGINT_ZERO)
   provision.entity.tokens = provision.entity.tokens.plus(event.params.tokens)
+  let provisionIsActive = provision.entity.tokens.gt(BIGINT_ZERO)
   saveProvision(provision.entity, event.block)
 
   // DataService
   assert(!dataService.isNew, "Data service does not exist.")
   dataService.entity.tokensProvisioned = dataService.entity.tokensProvisioned.plus(event.params.tokens)
+  // Increment counters if provision became active
+  if (!provisionWasActive && provisionIsActive) {
+    dataService.entity.countProvisions += 1
+    dataService.entity.countServiceProviders += 1
+  }
   saveDataService(dataService.entity, event.block)
 
   // ServiceProvider
@@ -109,10 +116,22 @@ export function handleProvisionIncreased(event: ProvisionIncreased): void {
   serviceProvider.entity.tokensProvisioned = serviceProvider.entity.tokensProvisioned.plus(event.params.tokens)
   assert(serviceProvider.entity.tokensStaked >= serviceProvider.entity.tokensProvisioned, "Provisioned tokens exceed staked tokens.")
   serviceProvider.entity.tokensIdle = serviceProvider.entity.tokensStaked.minus(serviceProvider.entity.tokensProvisioned)
+  // Increment counter if provision became active
+  if (!provisionWasActive && provisionIsActive) {
+    serviceProvider.entity.countProvisions += 1
+  }
   saveServiceProvider(serviceProvider.entity, event.block)
 
   // GraphNetwork
   graphNetwork.tokensProvisioned = graphNetwork.tokensProvisioned.plus(event.params.tokens)
+  // Increment counters if provision became active
+  if (!provisionWasActive && provisionIsActive) {
+    graphNetwork.countProvisions += 1
+    // Increment data service count if this is the DS's first active provision
+    if (dataService.entity.countProvisions == 1) {
+      graphNetwork.countDataServices += 1
+    }
+  }
   saveGraphNetwork(graphNetwork)
 }
 

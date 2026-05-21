@@ -80,7 +80,6 @@ export function handleGraphPaymentCollected(event: GraphPaymentCollected): void 
     event.block.number,
     event.block.timestamp
   )
-  delegationPool.entity.tokens = delegationPool.entity.tokens.plus(tokensDelegationPool)
   delegationPool.entity.tokensDistributed = delegationPool.entity.tokensDistributed.plus(tokensDelegationPool)
   saveDelegationPool(delegationPool.entity, event.block)
 }

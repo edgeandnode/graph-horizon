@@ -263,7 +263,7 @@ describe("handleGraphPaymentCollected", () => {
     assert.fieldEquals("Provision", provisionId, "tokensCollected", tokens.toString())
   })
 
-  test("adds tokens to existing DelegationPool", () => {
+  test("tracks tokensDistributed on existing DelegationPool", () => {
     // Setup: create SP with stake, provision, and delegation pool
     let stakeTokens = BigInt.fromString("10000000000000000000000") // 10000 GRT
     let depositEvent = createStakeDepositedEvent(RECEIVER_ADDRESS, stakeTokens)
@@ -308,9 +308,9 @@ describe("handleGraphPaymentCollected", () => {
     )
     handleGraphPaymentCollected(event)
 
-    // DelegationPool should have increased tokens and track distribution
-    let expectedPoolTokens = delegatedTokens.plus(tokensDelegationPool)
-    assert.fieldEquals("DelegationPool", poolId, "tokens", expectedPoolTokens.toString())
+    // DelegationPool.tokens is NOT updated here - that's done by TokensToDelegationPoolAdded event
+    // This handler only tracks tokensDistributed (cumulative distribution metric)
+    assert.fieldEquals("DelegationPool", poolId, "tokens", delegatedTokens.toString())
     assert.fieldEquals("DelegationPool", poolId, "tokensDistributed", tokensDelegationPool.toString())
   })
 
