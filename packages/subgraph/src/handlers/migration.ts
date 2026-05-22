@@ -17,6 +17,7 @@ import {
   decodeGetStakeResult,
   decodeGetDelegationPoolResult,
 } from "../common/multicall"
+import { BIGINT_ZERO } from "../common/constants"
 
 // Batch size for multicall - balance between efficiency and gas limits
 const MULTICALL_BATCH_SIZE = 100
@@ -87,11 +88,15 @@ export function migrateServiceProviders(block: ethereum.Block, networkConfig: Ne
       let tokensStaked = decodeGetStakeResult(results[i])
 
       // Create service provider
-      let sp = getOrCreateServiceProvider(address, block.number, block.timestamp)
-      assert(sp.isNew, "Service provider already exists.")
-      sp.entity.tokensStaked = tokensStaked
-      sp.entity.tokensIdle = tokensStaked // No provisions at migration, so all stake is idle
-      saveServiceProvider(sp.entity, block)
+      let serviceProvider = getOrCreateServiceProvider(address, block.number, block.timestamp)
+      // The SP might exist already due to GraphPayments / PaymentsEscrow prior initialization
+      // but if it does it should not have staked tokens
+      assert(serviceProvider.isNew || serviceProvider.entity.tokensStaked.equals(BIGINT_ZERO), "Service provider already exists.")
+      serviceProvider.entity.tokensStaked = tokensStaked
+      // No provisions at migration, so all stake is idle
+      // This is a simplification that does not account for legacy allocations, so data close to Horizon genesis should not be trusted
+      serviceProvider.entity.tokensIdle = tokensStaked
+      saveServiceProvider(serviceProvider.entity, block)
 
       // Update graph network totals
       graphNetwork.tokensStaked = graphNetwork.tokensStaked.plus(tokensStaked)
@@ -123,9 +128,6 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
   let verifierBytes = Bytes.fromHexString(verifier.toHexString()) as Bytes
   let graphNetwork = getOrCreateGraphNetwork()
   let dataService = getOrCreateDataService(verifierBytes, block.number, block.timestamp)
-  if (dataService.isNew) {
-    graphNetwork.countDataServices += 1
-  }
 
   let indexerAddresses = networkConfig.delegatedIndexerAddresses
 
@@ -163,7 +165,9 @@ export function migrateDelegationPools(block: ethereum.Block, networkConfig: Net
 
       // Create delegation pool
       let pool = getOrCreateDelegationPool(indexerBytes, verifierBytes, block.number, block.timestamp)
-      assert(pool.isNew, "Delegation pool already exists.")
+      // The pool might exist already due to GraphPayments / PaymentsEscrow prior initialization
+      // but if it does it should not have tokens
+      assert(pool.isNew || pool.entity.tokens.equals(BIGINT_ZERO), "Delegation pool already exists.")
       pool.entity.tokens = poolData[0]
       pool.entity.shares = poolData[1]
       pool.entity.tokensThawing = poolData[2]

@@ -17,6 +17,10 @@ export class ProvisionResult {
   }
 }
 
+/**
+ * Gets or creates a Provision entity.
+ * Provisions are created when a service provider provisions stake to a data service.
+ */
 export function getOrCreateProvision(
   serviceProvider: Bytes,
   dataService: Bytes,
@@ -29,15 +33,27 @@ export function getOrCreateProvision(
 
   if (entity == null) {
     entity = new Provision(id)
+
+    // Relationships
     entity.serviceProvider = serviceProvider
     entity.dataService = dataService
+
+    // Tokens
     entity.tokens = BIGINT_ZERO
     entity.tokensThawing = BIGINT_ZERO
+    entity.tokensCollected = BIGINT_ZERO
+    entity.tokensSlashed = BIGINT_ZERO
+
+    // Parameters
     entity.maxVerifierCut = BIGINT_ZERO
     entity.thawingPeriod = BIGINT_ZERO
+
+    // Staged parameters
     entity.maxVerifierCutPending = BIGINT_ZERO
     entity.thawingPeriodPending = BIGINT_ZERO
     entity.lastParametersStagedAt = BIGINT_ZERO
+
+    // Metadata
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber

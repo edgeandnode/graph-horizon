@@ -34,11 +34,19 @@ export function getOrCreateDelegationPool(
 
   if (entity == null) {
     entity = new DelegationPool(id)
+
+    // Relationships
     entity.serviceProvider = serviceProvider
     entity.dataService = dataService
+
+    // Pool state
     entity.tokens = BIGINT_ZERO
     entity.shares = BIGINT_ZERO
     entity.tokensThawing = BIGINT_ZERO
+    entity.tokensDistributed = BIGINT_ZERO
+    entity.tokensSlashed = BIGINT_ZERO
+
+    // Metadata
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber

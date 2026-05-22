@@ -32,15 +32,18 @@ export function handleTokensDelegated(event: TokensDelegated): void {
     event.block.number,
     event.block.timestamp
   )
+  let poolWasActive = pool.entity.tokens.gt(BIGINT_ZERO)
   pool.entity.tokens = pool.entity.tokens.plus(tokens)
   pool.entity.shares = pool.entity.shares.plus(shares)
+  let poolIsActive = pool.entity.tokens.gt(BIGINT_ZERO)
   saveDelegationPool(pool.entity, event.block)
 
   // Update DataService
   let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
   assert(!dataService.isNew, "Data service does not exist.")
   dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(tokens)
-  if (pool.isNew) {
+  // Increment counter if pool became active
+  if (!poolWasActive && poolIsActive) {
     dataService.entity.countDelegationPools += 1
   }
   saveDataService(dataService.entity, event.block)
@@ -54,7 +57,8 @@ export function handleTokensDelegated(event: TokensDelegated): void {
   // Update GraphNetwork
   let graphNetwork = getOrCreateGraphNetwork()
   graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.plus(tokens)
-  if (pool.isNew) {
+  // Increment counter if pool became active
+  if (!poolWasActive && poolIsActive) {
     graphNetwork.countDelegationPools += 1
   }
   saveGraphNetwork(graphNetwork)
@@ -185,8 +189,11 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
     event.block.timestamp
   )
   assert(!pool.isNew, "Delegation pool does not exist.")
+  let poolWasActive = pool.entity.tokens.gt(BIGINT_ZERO)
   assert(pool.entity.tokens >= tokens, "Slash tokens exceed pool tokens.")
   pool.entity.tokens = pool.entity.tokens.minus(tokens)
+  pool.entity.tokensSlashed = pool.entity.tokensSlashed.plus(tokens)
+  let poolIsActive = pool.entity.tokens.gt(BIGINT_ZERO)
   saveDelegationPool(pool.entity, event.block)
 
   // Update DataService
@@ -197,6 +204,11 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
   dataService.entity.countDelegationPoolSlashEvents += 1
   dataService.entity.tokensSlashed = dataService.entity.tokensSlashed.plus(tokens)
   dataService.entity.tokensSlashedFromDelegationPools = dataService.entity.tokensSlashedFromDelegationPools.plus(tokens)
+  // Decrement counter if pool became inactive
+  if (poolWasActive && !poolIsActive) {
+    assert(dataService.entity.countDelegationPools > 0, "Data service delegation pool count is zero.")
+    dataService.entity.countDelegationPools -= 1
+  }
   saveDataService(dataService.entity, event.block)
 
   // Update ServiceProvider
@@ -216,6 +228,11 @@ export function handleDelegationSlashed(event: DelegationSlashed): void {
   graphNetwork.countDelegationPoolSlashEvents += 1
   graphNetwork.tokensSlashed = graphNetwork.tokensSlashed.plus(tokens)
   graphNetwork.tokensSlashedFromDelegationPools = graphNetwork.tokensSlashedFromDelegationPools.plus(tokens)
+  // Decrement counter if pool became inactive
+  if (poolWasActive && !poolIsActive) {
+    assert(graphNetwork.countDelegationPools > 0, "Network delegation pool count is zero.")
+    graphNetwork.countDelegationPools -= 1
+  }
   saveGraphNetwork(graphNetwork)
 }
 
@@ -239,13 +256,19 @@ export function handleTokensToDelegationPoolAdded(event: TokensToDelegationPoolA
     event.block.timestamp
   )
   assert(!pool.isNew, "Delegation pool does not exist.")
+  let poolWasActive = pool.entity.tokens.gt(BIGINT_ZERO)
   pool.entity.tokens = pool.entity.tokens.plus(tokens)
+  let poolIsActive = pool.entity.tokens.gt(BIGINT_ZERO)
   saveDelegationPool(pool.entity, event.block)
 
   // Update DataService
   let dataService = getOrCreateDataService(verifierBytes, event.block.number, event.block.timestamp)
   assert(!dataService.isNew, "Data service does not exist.")
   dataService.entity.tokensDelegated = dataService.entity.tokensDelegated.plus(tokens)
+  // Increment counter if pool became active
+  if (!poolWasActive && poolIsActive) {
+    dataService.entity.countDelegationPools += 1
+  }
   saveDataService(dataService.entity, event.block)
 
   // Update ServiceProvider
@@ -257,5 +280,9 @@ export function handleTokensToDelegationPoolAdded(event: TokensToDelegationPoolA
   // Update GraphNetwork
   let graphNetwork = getOrCreateGraphNetwork()
   graphNetwork.tokensDelegated = graphNetwork.tokensDelegated.plus(tokens)
+  // Increment counter if pool became active
+  if (!poolWasActive && poolIsActive) {
+    graphNetwork.countDelegationPools += 1
+  }
   saveGraphNetwork(graphNetwork)
 }

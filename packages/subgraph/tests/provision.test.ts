@@ -271,6 +271,60 @@ describe("ProvisionIncreased", () => {
     assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", totalProvisionTokens.toString())
     assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensProvisioned", totalProvisionTokens.toString())
   })
+
+  test("increments counts when inactive provision becomes active again", () => {
+    // Setup: deposit and create provision
+    let stakeTokens = BigInt.fromString("10000000000000000000000") // 10000 GRT
+    let depositEvent = createStakeDepositedEvent(SP_ADDRESS, stakeTokens)
+    handleHorizonStakeDeposited(depositEvent)
+
+    let initialTokens = BigInt.fromString("3000000000000000000000") // 3000 GRT
+    let createEvent = createProvisionCreatedEvent(SP_ADDRESS, VERIFIER_ADDRESS, initialTokens, BigInt.fromI32(100000), BigInt.fromI32(2592000))
+    handleProvisionCreated(createEvent)
+
+    // Verify initial counts
+    let verifierBytes = Bytes.fromHexString(VERIFIER_ADDRESS.toHexString()).toHexString()
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countProvisions", "1")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countDataServices", "1")
+    assert.fieldEquals("DataService", verifierBytes, "countProvisions", "1")
+    assert.fieldEquals("DataService", verifierBytes, "countServiceProviders", "1")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "countProvisions", "1")
+
+    // Thaw all tokens
+    let thawEvent = createProvisionThawedEvent(SP_ADDRESS, VERIFIER_ADDRESS, initialTokens)
+    handleProvisionThawed(thawEvent)
+
+    // Deprovision all tokens - provision becomes inactive, counts should decrement
+    let deprovisionEvent = createTokensDeprovisionedEvent(SP_ADDRESS, VERIFIER_ADDRESS, initialTokens)
+    handleTokensDeprovisioned(deprovisionEvent)
+
+    // Verify counts decremented
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countProvisions", "0")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countDataServices", "0")
+    assert.fieldEquals("DataService", verifierBytes, "countProvisions", "0")
+    assert.fieldEquals("DataService", verifierBytes, "countServiceProviders", "0")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "countProvisions", "0")
+
+    let provisionId = getProvisionIdString(SP_ADDRESS, VERIFIER_ADDRESS)
+    assert.fieldEquals("Provision", provisionId, "tokens", "0")
+
+    // Increase provision - provision becomes active again, counts should increment
+    let increaseAmount = BigInt.fromString("2000000000000000000000") // 2000 GRT
+    let increaseEvent = createProvisionIncreasedEvent(SP_ADDRESS, VERIFIER_ADDRESS, increaseAmount)
+    handleProvisionIncreased(increaseEvent)
+
+    // Verify counts incremented back
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countProvisions", "1")
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "countDataServices", "1")
+    assert.fieldEquals("DataService", verifierBytes, "countProvisions", "1")
+    assert.fieldEquals("DataService", verifierBytes, "countServiceProviders", "1")
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "countProvisions", "1")
+
+    // Verify token amounts
+    assert.fieldEquals("Provision", provisionId, "tokens", increaseAmount.toString())
+    assert.fieldEquals("ServiceProvider", SP_ADDRESS.toHexString(), "tokensProvisioned", increaseAmount.toString())
+    assert.fieldEquals("GraphNetwork", GRAPH_NETWORK_ID.toHexString(), "tokensProvisioned", increaseAmount.toString())
+  })
 })
 
 describe("ProvisionThawed", () => {

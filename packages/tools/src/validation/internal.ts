@@ -240,8 +240,19 @@ async function main(): Promise<number> {
   // Filter to only SPs with stake > 0 (matches countServiceProviders semantics)
   const stakedSPs = serviceProviders.filter((sp) => BigInt(sp.tokensStaked) > 0n)
 
+  // Filter to only provisions with tokens > 0 (matches countProvisions semantics)
+  const activeProvisions = provisions.filter((p) => BigInt(p.tokens) > 0n)
+
   // Filter to only pools with tokens > 0 (matches countDelegationPools semantics)
   const activePools = pools.filter((p) => BigInt(p.tokens) > 0n)
+
+  // Filter to only data services with at least one active provision (matches countDataServices semantics)
+  const activeProvisionsByDS = new Map<string, number>()
+  for (const p of activeProvisions) {
+    const count = activeProvisionsByDS.get(p.dataService.id) || 0
+    activeProvisionsByDS.set(p.dataService.id, count + 1)
+  }
+  const activeDataServices = dataServices.filter((ds) => (activeProvisionsByDS.get(ds.id) || 0) > 0)
 
   // Filter thaw requests by status
   const pendingThawRequests = thawRequests.filter((t) => !t.fulfilled)
@@ -253,8 +264,8 @@ async function main(): Promise<number> {
 
   console.log(`  GraphNetwork: found`)
   console.log(`  ServiceProviders: ${serviceProviders.length} total, ${stakedSPs.length} with stake`)
-  console.log(`  DataServices: ${dataServices.length}`)
-  console.log(`  Provisions: ${provisions.length}`)
+  console.log(`  DataServices: ${dataServices.length} total, ${activeDataServices.length} with active provisions`)
+  console.log(`  Provisions: ${provisions.length} total, ${activeProvisions.length} with tokens`)
   console.log(`  DelegationPools: ${pools.length} total, ${activePools.length} with tokens`)
   console.log(`  ProvisionThawRequests: ${thawRequests.length} total, ${pendingThawRequests.length} pending, ${fulfilledThawRequests.length} fulfilled`)
   console.log(`  ProvisionFeeCuts: ${feeCuts.length}`)
@@ -268,19 +279,19 @@ async function main(): Promise<number> {
 
   console.log("=== GraphNetwork Count Validations ===")
 
-  if (!validateCount("ServiceProviders", stakedSPs.length, graphNetwork.countServiceProviders)) {
+  if (!validateCount("ServiceProviders (staked)", stakedSPs.length, graphNetwork.countServiceProviders)) {
     warnings++
   }
 
-  if (!validateCount("DataServices", dataServices.length, graphNetwork.countDataServices)) {
+  if (!validateCount("DataServices (with active provisions)", activeDataServices.length, graphNetwork.countDataServices)) {
     warnings++
   }
 
-  if (!validateCount("Provisions", provisions.length, graphNetwork.countProvisions)) {
+  if (!validateCount("Provisions (active)", activeProvisions.length, graphNetwork.countProvisions)) {
     warnings++
   }
 
-  if (!validateCount("DelegationPools", activePools.length, graphNetwork.countDelegationPools)) {
+  if (!validateCount("DelegationPools (active)", activePools.length, graphNetwork.countDelegationPools)) {
     warnings++
   }
 
@@ -395,22 +406,23 @@ async function main(): Promise<number> {
 
   for (const ds of dataServices) {
     const dsProvisions = provisions.filter((p) => p.dataService.id === ds.id)
+    const dsActiveProvisions = dsProvisions.filter((p) => BigInt(p.tokens) > 0n)
     const dsPools = pools.filter((p) => p.dataService.id === ds.id)
     const dsActivePools = dsPools.filter((p) => BigInt(p.tokens) > 0n)
 
-    // Count unique service providers with provisions to this data service
-    const uniqueSPs = new Set(dsProvisions.map((p) => p.serviceProvider.id))
+    // Count unique service providers with active provisions to this data service
+    const uniqueSPs = new Set(dsActiveProvisions.map((p) => p.serviceProvider.id))
 
     const issues: string[] = []
 
-    // countServiceProviders should equal unique SPs with provisions
+    // countServiceProviders should equal unique SPs with active provisions
     if (ds.countServiceProviders !== uniqueSPs.size) {
       issues.push(`countServiceProviders: DS=${ds.countServiceProviders}, actual=${uniqueSPs.size}`)
     }
 
-    // countProvisions should equal number of provisions
-    if (ds.countProvisions !== dsProvisions.length) {
-      issues.push(`countProvisions: DS=${ds.countProvisions}, actual=${dsProvisions.length}`)
+    // countProvisions should equal number of active provisions
+    if (ds.countProvisions !== dsActiveProvisions.length) {
+      issues.push(`countProvisions: DS=${ds.countProvisions}, actual=${dsActiveProvisions.length}`)
     }
 
     // countDelegationPools should equal number of active pools

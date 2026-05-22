@@ -20,6 +20,11 @@ export class OperatorAuthorizationResult {
   }
 }
 
+/**
+ * Gets or creates an OperatorAuthorization entity.
+ * Tracks whether an operator is authorized to act on behalf of a service provider
+ * for a specific data service.
+ */
 export function getOrCreateOperatorAuthorization(
   operator: Bytes,
   serviceProvider: Bytes,
@@ -33,10 +38,16 @@ export function getOrCreateOperatorAuthorization(
 
   if (entity == null) {
     entity = new OperatorAuthorization(id)
+
+    // Relationships
     entity.operator = operator
     entity.serviceProvider = serviceProvider
     entity.dataService = dataService
+
+    // State
     entity.allowed = false
+
+    // Metadata
     entity.createdAtBlock = blockNumber
     entity.createdAt = timestamp
     entity.updatedAtBlock = blockNumber

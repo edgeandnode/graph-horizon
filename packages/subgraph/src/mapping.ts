@@ -27,3 +27,11 @@ export {
 } from "./handlers/thawRequest"
 export { handleDelegationFeeCutSet } from "./handlers/feeCut"
 export { handleOperatorSet } from "./handlers/operator"
+export { handleGraphPaymentCollected } from "./handlers/payments"
+export {
+  handleDeposit,
+  handleThaw,
+  handleCancelThaw,
+  handleWithdraw,
+  handleEscrowCollected,
+} from "./handlers/escrow"

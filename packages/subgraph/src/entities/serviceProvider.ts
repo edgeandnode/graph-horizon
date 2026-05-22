@@ -12,6 +12,10 @@ export class ServiceProviderResult {
   }
 }
 
+/**
+ * Gets or creates a ServiceProvider entity.
+ * Service providers are addresses that stake tokens and provide services on the network.
+ */
 export function getOrCreateServiceProvider(
   id: Bytes,
   blockNumber: BigInt,
@@ -25,6 +29,7 @@ export function getOrCreateServiceProvider(
 
     // Counts
     entity.countProvisions = 0
+    entity.countEscrowAccounts = 0
     entity.countProvisionSlashEvents = 0
     entity.countDelegationPoolSlashEvents = 0
 
@@ -37,6 +42,16 @@ export function getOrCreateServiceProvider(
     // Delegation
     entity.tokensDelegated = BIGINT_ZERO
     entity.tokensDelegatedThawing = BIGINT_ZERO
+
+    // Payment collection
+    entity.tokensCollected = BIGINT_ZERO
+    entity.tokensDistributedToServiceProvider = BIGINT_ZERO
+    entity.tokensDistributedAsProtocolTax = BIGINT_ZERO
+    entity.tokensDistributedToDelegationPools = BIGINT_ZERO
+    entity.tokensDistributedToDataServices = BIGINT_ZERO
+
+    // Escrow
+    entity.tokensEscrowed = BIGINT_ZERO
 
     // Slashing
     entity.tokensSlashed = BIGINT_ZERO
